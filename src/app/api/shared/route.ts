@@ -113,7 +113,7 @@ export async function GET(request: Request) {
       const exp = s.expense;
       const isInstallment = exp.totalInstallments && exp.totalInstallments > 1;
       const activeInstallment = isInstallment
-        ? exp.installments.find((inst) => inst.dueDate >= startDate && inst.dueDate < endDate)
+        ? exp.installments.find((inst: any) => inst.dueDate >= startDate && inst.dueDate < endDate)
         : null;
       const monthlyAmount = activeInstallment?.amount ?? exp.amount;
       const myAmount = isInstallment ? (monthlyAmount * s.percentage) / 100 : s.amount;
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
         category: exp.category,
         payerName: exp.user.name,
         payerId: exp.userId,
-        shares: exp.shares.map((sh) => ({
+        shares: exp.shares.map((sh: any) => ({
           id: sh.id,
           userId: sh.userId,
           percentage: sh.percentage,
@@ -145,12 +145,12 @@ export async function GET(request: Request) {
     for (const exp of payerExpenses) {
       const isInstallment = exp.totalInstallments && exp.totalInstallments > 1;
       const activeInstallment = isInstallment
-        ? exp.installments.find((inst) => inst.dueDate >= startDate && inst.dueDate < endDate)
+        ? exp.installments.find((inst: any) => inst.dueDate >= startDate && inst.dueDate < endDate)
         : null;
       const monthlyAmount = activeInstallment?.amount ?? exp.amount;
       const othersAmount = isInstallment
-        ? exp.shares.reduce((s, sh) => s + (monthlyAmount * sh.percentage) / 100, 0)
-        : exp.shares.reduce((s, sh) => s + sh.amount, 0);
+        ? exp.shares.reduce((s: number, sh: any) => s + (monthlyAmount * sh.percentage) / 100, 0)
+        : exp.shares.reduce((s: number, sh: any) => s + sh.amount, 0);
       combined.push({
         id: `ep-${exp.id}`,
         type: "expense",
@@ -163,7 +163,7 @@ export async function GET(request: Request) {
         category: exp.category,
         payerName: exp.user.name,
         payerId: exp.userId,
-        shares: exp.shares.map((sh) => ({
+        shares: exp.shares.map((sh: any) => ({
           id: sh.id,
           userId: sh.userId,
           percentage: sh.percentage,
@@ -241,7 +241,7 @@ export async function GET(request: Request) {
         category: rec.category,
         payerName: effectivePayerName,
         payerId: effectivePayerId,
-        shares: rec.shares.map((sh) => ({
+        shares: rec.shares.map((sh: any) => ({
           id: sh.id,
           userId: sh.userId,
           percentage: sh.percentage,
@@ -259,7 +259,7 @@ export async function GET(request: Request) {
       seen.add(rec.id);
       const effectivePayerName = rec.payer?.name ?? rec.user.name;
       const effectivePayerId = rec.payerId ?? rec.userId;
-      const othersAmount = rec.shares.reduce((s, sh) => s + sh.amount, 0);
+      const othersAmount = rec.shares.reduce((s: number, sh: any) => s + sh.amount, 0);
       combined.push({
         id: `rp-${rec.id}`,
         type: "recurring",
@@ -272,7 +272,7 @@ export async function GET(request: Request) {
         category: rec.category,
         payerName: effectivePayerName,
         payerId: effectivePayerId,
-        shares: rec.shares.map((sh) => ({
+        shares: rec.shares.map((sh: any) => ({
           id: sh.id,
           userId: sh.userId,
           percentage: sh.percentage,

@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     orderBy: { dueDate: "asc" },
   });
 
-  const totalPending = pending.reduce((s, i) => s + i.amount, 0);
+  const totalPending = pending.reduce((s: number, i: any) => s + i.amount, 0);
 
   return NextResponse.json({ card, pending, totalPending });
 }

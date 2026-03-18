@@ -34,8 +34,8 @@ async function createRecurringShares(
       where: { userId: { in: allUserIds }, month: currentMonth, year: currentYear },
     });
 
-    const incomeMap = new Map(incomes.map((i) => [i.userId, i.amount]));
-    const totalIncome = allUserIds.reduce((sum, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
+    const incomeMap = new Map<string, number>(incomes.map((i: any) => [i.userId, i.amount]));
+    const totalIncome = allUserIds.reduce((sum: number, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
     const nonPayerIds = allUserIds.filter((uid) => uid !== payerId);
     if (nonPayerIds.length === 0) return;
 
@@ -43,7 +43,7 @@ async function createRecurringShares(
       await prisma.recurringShare.createMany({
         data: nonPayerIds.map((uid) => {
           const userIncome = incomeMap.get(uid) ?? 0;
-          const pct = (userIncome / totalIncome) * 100;
+          const pct = (userIncome / (totalIncome as number)) * 100;
           return { recurringExpenseId, userId: uid, percentage: pct, amount: (totalAmount * pct) / 100 };
         }),
       });
@@ -151,12 +151,12 @@ export async function POST(req: Request) {
       });
       if (group) {
         const allMembers = group.members;
-        const totalPct = allMembers.reduce((s, m) => s + m.percentage, 0);
+        const totalPct = allMembers.reduce((s: number, m: any) => s + m.percentage, 0);
         if (Math.abs(totalPct - 100) <= 1) {
-          const nonPayerMembers = allMembers.filter((m) => m.userId !== effectivePayerId);
+          const nonPayerMembers = allMembers.filter((m: any) => m.userId !== effectivePayerId);
           if (nonPayerMembers.length > 0) {
             await prisma.recurringShare.createMany({
-              data: nonPayerMembers.map((m) => ({
+              data: nonPayerMembers.map((m: any) => ({
                 recurringExpenseId: recurring.id,
                 userId: m.userId,
                 percentage: m.percentage,

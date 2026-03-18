@@ -29,11 +29,11 @@ export async function GET(req: Request) {
   const prevExpenses = await prisma.expense.findMany({
     where: { userId: session.id, date: { gte: prevStart, lt: prevEnd } },
   });
-  const prevTotal = prevExpenses.reduce((s, e) => s + e.amount, 0);
+  const prevTotal = prevExpenses.reduce((s: number, e: any) => s + e.amount, 0);
 
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const total = expenses.reduce((sum: number, e: any) => sum + e.amount, 0);
 
-  const byCategory = expenses.reduce<Record<string, { name: string; color: string; total: number; count: number }>>((acc, e) => {
+  const byCategory = expenses.reduce((acc: Record<string, { name: string; color: string; total: number; count: number }>, e: any) => {
     const key = e.category.name;
     if (!acc[key]) acc[key] = { name: key, color: e.category.color, total: 0, count: 0 };
     acc[key].total += e.amount;
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     ? today.getDate()
     : daysInMonth;
 
-  const dailyMap = expenses.reduce<Record<string, number>>((acc, e) => {
+  const dailyMap = expenses.reduce((acc: Record<string, number>, e: any) => {
     const day = e.date.toISOString().split("T")[0];
     acc[day] = (acc[day] || 0) + e.amount;
     return acc;
@@ -71,8 +71,8 @@ export async function GET(req: Request) {
     const wStart = new Date(wEnd);
     wStart.setDate(wEnd.getDate() - 6);
     const weekAmount = expenses
-      .filter((e) => { const d = new Date(e.date); return d >= wStart && d <= wEnd; })
-      .reduce((s, e) => s + e.amount, 0);
+      .filter((e: any) => { const d = new Date(e.date); return d >= wStart && d <= wEnd; })
+      .reduce((s: number, e: any) => s + e.amount, 0);
     const label = `${wStart.getDate()}/${wStart.getMonth() + 1}-${wEnd.getDate()}/${wEnd.getMonth() + 1}`;
     weeklyTotals.push({ week: label, amount: weekAmount });
   }
@@ -84,15 +84,15 @@ export async function GET(req: Request) {
   });
 
   const alerts = budgets
-    .map((b) => {
+    .map((b: any) => {
       const spent = byCategory[b.category.name]?.total || 0;
       const pct = (spent / b.amount) * 100;
       return { category: b.category.name, budget: b.amount, spent, percentage: Math.round(pct) };
     })
-    .filter((a) => a.percentage >= 80);
+    .filter((a: any) => a.percentage >= 80);
 
   // Recent expenses (last 10)
-  const recentExpenses = expenses.slice(0, 10).map((e) => ({
+  const recentExpenses = expenses.slice(0, 10).map((e: any) => ({
     id: e.id,
     amount: e.amount,
     description: e.description,
@@ -102,7 +102,7 @@ export async function GET(req: Request) {
 
   // Top expense
   const topExpense = expenses.length
-    ? expenses.reduce((max, e) => (e.amount > max.amount ? e : max))
+    ? expenses.reduce((max: any, e: any) => (e.amount > max.amount ? e : max))
     : null;
 
   // All-time recent (when current month is empty)
@@ -114,7 +114,7 @@ export async function GET(req: Request) {
       orderBy: { date: "desc" },
       take: 10,
     });
-    allTimeRecent = latest.map((e) => ({
+    allTimeRecent = latest.map((e: any) => ({
       id: e.id,
       amount: e.amount,
       description: e.description,
@@ -141,7 +141,7 @@ export async function GET(req: Request) {
     },
     _sum: { amount: true },
   });
-  const totalCreditCardDebt = creditCardDebt.reduce((s, r) => s + (r._sum.amount ?? 0), 0);
+  const totalCreditCardDebt = creditCardDebt.reduce((s: number, r: any) => s + (r._sum.amount ?? 0), 0);
 
   // Upcoming recurring expenses (next 30 days)
   const in30Days = new Date(today);
@@ -161,7 +161,7 @@ export async function GET(req: Request) {
     total,
     prevTotal,
     count: expenses.length,
-    byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
+    byCategory: Object.values(byCategory).sort((a: any, b: any) => b.total - a.total),
     dailyTotals,
     weeklyTotals,
     alerts,
@@ -173,7 +173,7 @@ export async function GET(req: Request) {
     incomeAmount,
     spendingPercentage,
     totalCreditCardDebt,
-    upcomingRecurring: upcomingRecurring.map((r) => ({
+    upcomingRecurring: upcomingRecurring.map((r: any) => ({
       id: r.id,
       description: r.description,
       amount: r.amount,

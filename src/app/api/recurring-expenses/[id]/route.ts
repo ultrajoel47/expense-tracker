@@ -36,8 +36,8 @@ async function recreateRecurringShares(
       where: { userId: { in: allUserIds }, month: currentMonth, year: currentYear },
     });
 
-    const incomeMap = new Map(incomes.map((i) => [i.userId, i.amount]));
-    const totalIncome = allUserIds.reduce((sum, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
+    const incomeMap = new Map<string, number>(incomes.map((i: any) => [i.userId, i.amount]));
+    const totalIncome = allUserIds.reduce((sum: number, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
     const nonPayerIds = allUserIds.filter((uid) => uid !== payerId);
     if (nonPayerIds.length === 0) return;
 
@@ -45,7 +45,7 @@ async function recreateRecurringShares(
       await prisma.recurringShare.createMany({
         data: nonPayerIds.map((uid) => {
           const userIncome = incomeMap.get(uid) ?? 0;
-          const pct = (userIncome / totalIncome) * 100;
+          const pct = (userIncome / (totalIncome as number)) * 100;
           return { recurringExpenseId, userId: uid, percentage: pct, amount: (totalAmount * pct) / 100 };
         }),
       });
@@ -117,7 +117,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     // Copy current shares to period
     if (rec.shares.length > 0) {
       await prisma.periodShare.createMany({
-        data: rec.shares.map((s) => ({
+        data: rec.shares.map((s: any) => ({
           periodId: period.id,
           userId: s.userId,
           percentage: s.percentage,

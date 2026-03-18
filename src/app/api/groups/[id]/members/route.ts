@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const existing = await prisma.groupMember.findMany({ where: { groupId: id } });
-  const newTotal = existing.reduce((s, m) => s + m.percentage, 0) + Number(percentage);
+  const newTotal = existing.reduce((s: number, m: any) => s + m.percentage, 0) + Number(percentage);
   if (newTotal > 101) {
     return NextResponse.json({ error: "Los porcentajes superarían el 100%" }, { status: 400 });
   }

@@ -36,7 +36,7 @@ async function recreateExpenseShares(
       where: { userId: { in: allUserIds }, month: currentMonth, year: currentYear },
     });
 
-    const incomeMap = new Map(incomes.map((i) => [i.userId, i.amount]));
+    const incomeMap = new Map<string, number>(incomes.map((i: { userId: string; amount: number }) => [i.userId, i.amount]));
     const totalIncome = allUserIds.reduce((sum, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
     const nonPayerIds = allUserIds.filter((uid) => uid !== payerId);
     if (nonPayerIds.length === 0) return;

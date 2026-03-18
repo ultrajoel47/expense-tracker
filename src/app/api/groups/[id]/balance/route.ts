@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!group) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 });
 
   // Build name lookup from group members
-  const userNames = new Map<string, string>(group.members.map((m) => [m.userId, m.user.name]));
+  const userNames = new Map<string, string>(group.members.map((m: any) => [m.userId, m.user.name]));
   // Also include owner name
   if (!userNames.has(group.ownerId)) {
     const owner = await prisma.user.findUnique({ where: { id: group.ownerId }, select: { name: true } });
@@ -55,7 +55,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       // For installment expenses only count past/current installments (not future ones)
       let amount = share.amount;
       if (expense.totalInstallments && expense.totalInstallments > 1) {
-        const pastCount = expense.installments.filter((inst) => inst.dueDate <= now).length;
+        const pastCount = expense.installments.filter((inst: any) => inst.dueDate <= now).length;
         amount = pastCount > 0 ? (share.amount / expense.totalInstallments) * pastCount : 0;
       }
       ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + amount;

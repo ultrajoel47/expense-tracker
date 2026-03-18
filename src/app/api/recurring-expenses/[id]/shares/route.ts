@@ -16,16 +16,3 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json(shares);
 }
 
-export async function PUT(req: Request, _context: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-
-  const { shareId, settled } = await req.json();
-
-  const updated = await prisma.recurringShare.update({
-    where: { id: shareId },
-    data: { settled: Boolean(settled) },
-  });
-
-  return NextResponse.json(updated);
-}

@@ -21,14 +21,14 @@ export async function GET(req: Request) {
 
   const header = "Fecha,Descripcion,Categoria,Monto\n";
   const rows = expenses
-    .map((e) => {
+    .map((e: any) => {
       const date = e.date.toISOString().split("T")[0];
       const desc = e.description.replace(/,/g, ";");
       return `${date},${desc},${e.category.name},${e.amount.toFixed(2)}`;
     })
     .join("\n");
 
-  const total = expenses.reduce((s, e) => s + e.amount, 0);
+  const total = expenses.reduce((s: number, e: any) => s + e.amount, 0);
   const footer = `\n\nTotal,,,${ total.toFixed(2)}`;
 
   const csv = header + rows + footer;

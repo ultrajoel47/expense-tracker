@@ -58,7 +58,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }),
     prisma.monthlyIncome.findMany({
       where: {
-        userId: { in: group.members.map((m) => m.userId) },
+        userId: { in: group.members.map((m: any) => m.userId) },
         month,
         year,
       },
@@ -66,29 +66,29 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   ]);
 
   const totalGroupExpenses =
-    expenses.reduce((sum, e) => {
+    expenses.reduce((sum: number, e: any) => {
       if (e.totalInstallments && e.totalInstallments > 1) {
         const active = e.installments.find(
-          (inst) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
+          (inst: any) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
         );
         return sum + (active?.amount ?? e.amount);
       }
       return sum + e.amount;
-    }, 0) + recurring.reduce((sum, r) => sum + r.amount, 0);
+    }, 0) + recurring.reduce((sum: number, r: any) => sum + r.amount, 0);
 
-  const totalGroupIncome = incomes.reduce((s, i) => s + i.amount, 0);
+  const totalGroupIncome = incomes.reduce((s: number, i: any) => s + i.amount, 0);
 
-  const memberStats = group.members.map((member) => {
-    const income = incomes.find((i) => i.userId === member.userId)?.amount ?? null;
+  const memberStats = group.members.map((member: any) => {
+    const income = incomes.find((i: any) => i.userId === member.userId)?.amount ?? null;
 
     // Total paid = sum of expenses where this member is the payer
     // For installment expenses, use the monthly installment amount
     const expensePaid = expenses
-      .filter((e) => e.userId === member.userId)
-      .reduce((sum, e) => {
+      .filter((e: any) => e.userId === member.userId)
+      .reduce((sum: number, e: any) => {
         if (e.totalInstallments && e.totalInstallments > 1) {
           const active = e.installments.find(
-            (inst) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
+            (inst: any) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
           );
           return sum + (active?.amount ?? e.amount);
         }
@@ -97,21 +97,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     // + sum of recurring where this member is the payer (full amount)
     const recurringPaid = recurring
-      .filter((r) => (r.payerId ?? r.userId) === member.userId)
-      .reduce((sum, r) => sum + r.amount, 0);
+      .filter((r: any) => (r.payerId ?? r.userId) === member.userId)
+      .reduce((sum: number, r: any) => sum + r.amount, 0);
 
     const totalPaid = expensePaid + recurringPaid;
 
     // Total charged = sum of expense shares for this member
     // For installment expenses, recalculate based on monthly installment amount
     const expenseCharged = expenses
-      .filter((e) => e.shares.some((s) => s.userId === member.userId))
-      .reduce((sum, e) => {
-        const share = e.shares.find((s) => s.userId === member.userId);
+      .filter((e: any) => e.shares.some((s: any) => s.userId === member.userId))
+      .reduce((sum: number, e: any) => {
+        const share = e.shares.find((s: any) => s.userId === member.userId);
         if (!share) return sum;
         if (e.totalInstallments && e.totalInstallments > 1) {
           const active = e.installments.find(
-            (inst) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
+            (inst: any) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
           );
           const instAmount = active?.amount ?? e.amount;
           return sum + (instAmount * share.percentage) / 100;
@@ -121,9 +121,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     // + sum of recurring shares for this member
     const recurringCharged = recurring
-      .flatMap((r) => r.shares)
-      .filter((s) => s.userId === member.userId)
-      .reduce((sum, s) => sum + s.amount, 0);
+      .flatMap((r: any) => r.shares)
+      .filter((s: any) => s.userId === member.userId)
+      .reduce((sum: number, s: any) => sum + s.amount, 0);
 
     const totalCharged = expenseCharged + recurringCharged;
 

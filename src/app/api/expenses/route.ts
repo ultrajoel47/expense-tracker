@@ -35,8 +35,8 @@ async function createExpenseShares(
       where: { userId: { in: allUserIds }, month: currentMonth, year: currentYear },
     });
 
-    const incomeMap = new Map(incomes.map((i) => [i.userId, i.amount]));
-    const totalIncome = allUserIds.reduce((sum, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
+    const incomeMap = new Map<string, number>(incomes.map((i: any) => [i.userId, i.amount]));
+    const totalIncome = allUserIds.reduce((sum: number, uid) => sum + (incomeMap.get(uid) ?? 0), 0);
     const nonPayerIds = allUserIds.filter((uid) => uid !== payerId);
     if (nonPayerIds.length === 0) return;
 
@@ -117,10 +117,10 @@ export async function GET(req: Request) {
     }),
   ]);
 
-  const data = expenses.map((exp) => {
+  const data = expenses.map((exp: any) => {
     if (!startDate || !endDate || !exp.totalInstallments || exp.totalInstallments <= 1) return exp;
     const currentInstallment = exp.installments.find(
-      (inst) => inst.dueDate >= startDate! && inst.dueDate < endDate!
+      (inst: any) => inst.dueDate >= startDate! && inst.dueDate < endDate!
     ) ?? null;
     return { ...exp, currentInstallment };
   });
@@ -205,12 +205,12 @@ export async function POST(req: Request) {
         });
         if (group) {
           const allMembers = group.members;
-          const totalPct = allMembers.reduce((s, m) => s + m.percentage, 0);
+          const totalPct = allMembers.reduce((s: number, m: any) => s + m.percentage, 0);
           if (Math.abs(totalPct - 100) <= 1) {
-            const nonPayerMembers = allMembers.filter((m) => m.userId !== session.id);
+            const nonPayerMembers = allMembers.filter((m: any) => m.userId !== session.id);
             if (nonPayerMembers.length > 0) {
               await prisma.expenseShare.createMany({
-                data: nonPayerMembers.map((m) => ({
+                data: nonPayerMembers.map((m: any) => ({
                   expenseId: expense.id,
                   userId: m.userId,
                   percentage: m.percentage,

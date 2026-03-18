@@ -26,13 +26,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
 
-  const memberIds = group.members.map((m) => m.userId);
+  const memberIds = group.members.map((m: any) => m.userId);
 
   const incomes = await prisma.monthlyIncome.findMany({
     where: { userId: { in: memberIds }, month: currentMonth, year: currentYear },
   });
 
-  const incomeMap = new Map<string, number>(incomes.map((i) => [i.userId, i.amount]));
+  const incomeMap = new Map<string, number>(incomes.map((i: any) => [i.userId, i.amount]));
 
   const warnings: string[] = [];
   for (const member of group.members) {
@@ -41,7 +41,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  const totalIncome = incomes.reduce((sum, i) => sum + i.amount, 0);
+  const totalIncome = incomes.reduce((sum: number, i: any) => sum + i.amount, 0);
 
   // Calculate percentages
   let percentages: { userId: string; percentage: number }[];
@@ -49,19 +49,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (totalIncome === 0) {
     // Equal split
     const base = parseFloat((100 / memberCount).toFixed(4));
-    percentages = group.members.map((m, idx) => ({
+    percentages = group.members.map((m: any, idx: number) => ({
       userId: m.userId,
       percentage: idx === memberCount - 1 ? parseFloat((100 - base * (memberCount - 1)).toFixed(4)) : base,
     }));
   } else {
     // Proportional to income
-    const rawPercentages = group.members.map((m) => ({
+    const rawPercentages = group.members.map((m: any) => ({
       userId: m.userId,
       percentage: parseFloat((((incomeMap.get(m.userId) ?? 0) / totalIncome) * 100).toFixed(4)),
     }));
 
     // Adjust last member so total is exactly 100
-    const sumWithoutLast = rawPercentages.slice(0, -1).reduce((s, p) => s + p.percentage, 0);
+    const sumWithoutLast = rawPercentages.slice(0, -1).reduce((s: number, p: any) => s + p.percentage, 0);
     rawPercentages[rawPercentages.length - 1].percentage = parseFloat(
       (100 - sumWithoutLast).toFixed(4)
     );
