@@ -1,0 +1,2364 @@
+{
+  "gastos": [
+    {
+      "description": "cama",
+      "totalAmount": 388776.0,
+      "installments": 12,
+      "startDate": "2025-03-01",
+      "card": "Galicia lali",
+      "monthlyAmount": 32398.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "ollas",
+      "totalAmount": 330308.34,
+      "installments": 6,
+      "startDate": "2025-02-08",
+      "card": "Santander Visa",
+      "monthlyAmount": 55051.39,
+      "owner": "joel"
+    },
+    {
+      "description": "carne",
+      "totalAmount": 126576.0,
+      "installments": 3,
+      "startDate": "2025-05-01",
+      "card": "Galicia lali",
+      "monthlyAmount": 42192.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carne",
+      "totalAmount": 208491.0,
+      "installments": 3,
+      "startDate": "2025-06-01",
+      "card": "Galicia lali",
+      "monthlyAmount": 69497.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "fernet",
+      "totalAmount": 64320.0,
+      "installments": 3,
+      "startDate": "2025-06-01",
+      "card": "Galicia lali",
+      "monthlyAmount": 21440.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "balbi",
+      "totalAmount": 118400.0,
+      "installments": 6,
+      "startDate": "2025-03-01",
+      "card": "Santander Visa",
+      "monthlyAmount": 19733.33,
+      "owner": "joel"
+    },
+    {
+      "description": "nafta",
+      "totalAmount": 83000.0,
+      "installments": 1,
+      "startDate": "2025-06-25",
+      "card": "Santander Visa",
+      "monthlyAmount": 83000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "bebidas hergo",
+      "totalAmount": 458806.0,
+      "installments": 1,
+      "startDate": "2025-06-02",
+      "card": "Santander Vir",
+      "monthlyAmount": 458806.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "disco",
+      "totalAmount": 30000.0,
+      "installments": 1,
+      "startDate": "2025-06-02",
+      "card": "Santander Vir",
+      "monthlyAmount": 30000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "cremitas skincare",
+      "totalAmount": 25400.0,
+      "installments": 3,
+      "startDate": "2025-06-06",
+      "card": "BBVA Pablo",
+      "monthlyAmount": 8466.67,
+      "owner": "virginia"
+    },
+    {
+      "description": "Compra coto ",
+      "totalAmount": 93779.0,
+      "installments": 1,
+      "startDate": "2025-06-04",
+      "card": "Brubank",
+      "monthlyAmount": 93779.0,
+      "owner": "joel"
+    },
+    {
+      "description": "Compra carrefour ",
+      "totalAmount": 125000.0,
+      "installments": 1,
+      "startDate": "2025-06-03",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 125000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compra disco",
+      "totalAmount": 30000.0,
+      "installments": 1,
+      "startDate": "2025-06-03",
+      "card": "Santander Visa",
+      "monthlyAmount": 30000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compra disco",
+      "totalAmount": 22080.0,
+      "installments": 1,
+      "startDate": "2025-06-03",
+      "card": "Brubank",
+      "monthlyAmount": 22080.0,
+      "owner": "joel"
+    },
+    {
+      "description": "cuadrada",
+      "totalAmount": 10800.0,
+      "installments": 1,
+      "startDate": "2025-06-05",
+      "card": "Brubank",
+      "monthlyAmount": 10800.0,
+      "owner": "joel"
+    },
+    {
+      "description": "prepizzas y fiambre",
+      "totalAmount": 9535.0,
+      "installments": 1,
+      "startDate": "2025-06-06",
+      "card": "Brubank Vir",
+      "monthlyAmount": 9535.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pechuga",
+      "totalAmount": 10200.0,
+      "installments": 1,
+      "startDate": "2025-06-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 10200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pechuga + huevos",
+      "totalAmount": 12370.0,
+      "installments": 1,
+      "startDate": "2025-06-11",
+      "card": "Brubank",
+      "monthlyAmount": 12370.0,
+      "owner": "joel"
+    },
+    {
+      "description": "destapacaños ",
+      "totalAmount": 7800.0,
+      "installments": 1,
+      "startDate": "2025-06-10",
+      "card": "Brubank",
+      "monthlyAmount": 7800.0,
+      "owner": "joel"
+    },
+    {
+      "description": "sorrentinos",
+      "totalAmount": 7100.0,
+      "installments": 1,
+      "startDate": "2025-06-10",
+      "card": "Brubank",
+      "monthlyAmount": 7100.0,
+      "owner": "joel"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 41454.0,
+      "installments": 1,
+      "startDate": "2025-06-12",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 41454.0,
+      "owner": "joel"
+    },
+    {
+      "description": "toledo",
+      "totalAmount": 4050.0,
+      "installments": 1,
+      "startDate": "2025-06-12",
+      "card": "Cuenta dni Vir",
+      "monthlyAmount": 4050.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "toledo",
+      "totalAmount": 9682.0,
+      "installments": 1,
+      "startDate": "2025-06-12",
+      "card": "Cuenta dni Vir",
+      "monthlyAmount": 9682.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "cuadrada",
+      "totalAmount": 12000.0,
+      "installments": 1,
+      "startDate": "2025-06-16",
+      "card": "Brubank",
+      "monthlyAmount": 12000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "prepizzas",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2025-06-16",
+      "card": "Brubank",
+      "monthlyAmount": 3000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "papa y cebolla",
+      "totalAmount": 2000.0,
+      "installments": 1,
+      "startDate": "2025-06-16",
+      "card": "Brubank",
+      "monthlyAmount": 2000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pechuga",
+      "totalAmount": 11000.0,
+      "installments": 1,
+      "startDate": "2025-06-17",
+      "card": "Brubank",
+      "monthlyAmount": 11000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "zanahoria ",
+      "totalAmount": 750.0,
+      "installments": 1,
+      "startDate": "2025-06-17",
+      "card": "Brubank",
+      "monthlyAmount": 750.0,
+      "owner": "joel"
+    },
+    {
+      "description": "arroz y condimentos ",
+      "totalAmount": 3300.0,
+      "installments": 1,
+      "startDate": "2025-06-17",
+      "card": "Prex Vir",
+      "monthlyAmount": 3300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "banana y tomate ",
+      "totalAmount": 1900.0,
+      "installments": 1,
+      "startDate": "2025-06-18",
+      "card": "Prex Vir",
+      "monthlyAmount": 1900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pollo y alitas ",
+      "totalAmount": 78000.0,
+      "installments": 1,
+      "startDate": "2025-06-18",
+      "card": "Prex Vir",
+      "monthlyAmount": 78000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "huevos",
+      "totalAmount": 6500.0,
+      "installments": 1,
+      "startDate": "2025-06-23",
+      "card": "Efectivo Joel",
+      "monthlyAmount": 6500.0,
+      "owner": "joel"
+    },
+    {
+      "description": "tequeños",
+      "totalAmount": 35500.0,
+      "installments": 1,
+      "startDate": "2025-06-23",
+      "card": "Brubank",
+      "monthlyAmount": 35500.0,
+      "owner": "joel"
+    },
+    {
+      "description": "estacionamiento",
+      "totalAmount": 7000.0,
+      "installments": 1,
+      "startDate": "2025-06-23",
+      "card": "Brubank",
+      "monthlyAmount": 7000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "comida bolt",
+      "totalAmount": 6500.0,
+      "installments": 1,
+      "startDate": "2025-06-23",
+      "card": "Brubank",
+      "monthlyAmount": 6500.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compras comida",
+      "totalAmount": 9100.0,
+      "installments": 1,
+      "startDate": "2025-06-24",
+      "card": "Prex Vir",
+      "monthlyAmount": 9100.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan lactal",
+      "totalAmount": 2600.0,
+      "installments": 1,
+      "startDate": "2025-06-25",
+      "card": "Prex Vir",
+      "monthlyAmount": 2600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "almacen",
+      "totalAmount": 2800.0,
+      "installments": 1,
+      "startDate": "2025-06-27",
+      "card": "Prex Vir",
+      "monthlyAmount": 2800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "ventanas ",
+      "totalAmount": 150000.0,
+      "installments": 1,
+      "startDate": "2025-07-01",
+      "card": "Prex Vir",
+      "monthlyAmount": 150000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "bazar",
+      "totalAmount": 94404.0,
+      "installments": 1,
+      "startDate": "2025-08-01",
+      "card": "Galicia Visa",
+      "monthlyAmount": 94404.0,
+      "owner": "joel"
+    },
+    {
+      "description": "huevos",
+      "totalAmount": 6600.0,
+      "installments": 1,
+      "startDate": "2025-06-28",
+      "card": "Prex Vir",
+      "monthlyAmount": 6600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 2000.0,
+      "installments": 1,
+      "startDate": "2025-06-28",
+      "card": "Prex Vir",
+      "monthlyAmount": 2000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "Compra Vea",
+      "totalAmount": 30000.0,
+      "installments": 1,
+      "startDate": "2025-06-29",
+      "card": "Brubank",
+      "monthlyAmount": 30000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "Compra Vea",
+      "totalAmount": 30000.0,
+      "installments": 1,
+      "startDate": "2025-06-29",
+      "card": "Santander Vir",
+      "monthlyAmount": 30000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "Compra Vea",
+      "totalAmount": 39000.0,
+      "installments": 1,
+      "startDate": "2025-08-05",
+      "card": "Galicia Visa",
+      "monthlyAmount": 39000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compra despensa",
+      "totalAmount": 12000.0,
+      "installments": 1,
+      "startDate": "2025-06-29",
+      "card": "Brubank",
+      "monthlyAmount": 12000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 5100.0,
+      "installments": 1,
+      "startDate": "2025-07-01",
+      "card": "Efectivo Vir",
+      "monthlyAmount": 5100.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "sanguches",
+      "totalAmount": 12500.0,
+      "installments": 1,
+      "startDate": "2025-07-03",
+      "card": "Efectivo Joel",
+      "monthlyAmount": 12500.0,
+      "owner": "joel"
+    },
+    {
+      "description": "Compra carrefour ",
+      "totalAmount": 36311.0,
+      "installments": 1,
+      "startDate": "2025-07-03",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 36311.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pan lactal",
+      "totalAmount": 2600.0,
+      "installments": 1,
+      "startDate": "2025-07-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 2600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "compra coto ",
+      "totalAmount": 97537.22,
+      "installments": 1,
+      "startDate": "2025-07-06",
+      "card": "Brubank",
+      "monthlyAmount": 97537.22,
+      "owner": "joel"
+    },
+    {
+      "description": "estacionamiento",
+      "totalAmount": 4200.0,
+      "installments": 1,
+      "startDate": "2025-07-06",
+      "card": "Efectivo Vir",
+      "monthlyAmount": 4200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "farmacia",
+      "totalAmount": 6000.0,
+      "installments": 1,
+      "startDate": "2025-07-07",
+      "card": "Brubank",
+      "monthlyAmount": 6000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria: papas",
+      "totalAmount": 1200.0,
+      "installments": 1,
+      "startDate": "2025-07-07",
+      "card": "Brubank",
+      "monthlyAmount": 1200.0,
+      "owner": "joel"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 51364.0,
+      "installments": 1,
+      "startDate": "2025-07-14",
+      "card": "Mercado pago Vir ",
+      "monthlyAmount": 51364.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compras varias",
+      "totalAmount": 20000.0,
+      "installments": 1,
+      "startDate": "2025-07-10",
+      "card": "Brubank",
+      "monthlyAmount": 20000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulero ",
+      "totalAmount": 4000.0,
+      "installments": 1,
+      "startDate": "2025-07-20",
+      "card": "Brubank",
+      "monthlyAmount": 4000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "condimentos",
+      "totalAmount": 6250.0,
+      "installments": 1,
+      "startDate": "2025-07-19",
+      "card": "Prex Vir",
+      "monthlyAmount": 6250.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan y huevos",
+      "totalAmount": 8100.0,
+      "installments": 1,
+      "startDate": "2025-07-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 8100.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "sal",
+      "totalAmount": 1600.0,
+      "installments": 1,
+      "startDate": "2025-07-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 1600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 65475.0,
+      "installments": 1,
+      "startDate": "2025-07-20",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 65475.0,
+      "owner": "joel"
+    },
+    {
+      "description": "muslo deshuesado ",
+      "totalAmount": 36000.0,
+      "installments": 1,
+      "startDate": "2025-07-22",
+      "card": "Prex Vir",
+      "monthlyAmount": 36000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 5840.0,
+      "installments": 1,
+      "startDate": "2025-07-16",
+      "card": "Prex Vir",
+      "monthlyAmount": 5840.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "huevos y pan",
+      "totalAmount": 9100.0,
+      "installments": 1,
+      "startDate": "2025-07-24",
+      "card": "Brubank",
+      "monthlyAmount": 9100.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compra coto",
+      "totalAmount": 151000.0,
+      "installments": 1,
+      "startDate": "2025-07-27",
+      "card": "Brubank",
+      "monthlyAmount": 151000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pizza",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2025-07-27",
+      "card": "Brubank",
+      "monthlyAmount": 3000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 5350.0,
+      "installments": 1,
+      "startDate": "2025-07-28",
+      "card": "Brubank",
+      "monthlyAmount": 5350.0,
+      "owner": "joel"
+    },
+    {
+      "description": "granja",
+      "totalAmount": 18850.0,
+      "installments": 1,
+      "startDate": "2025-07-28",
+      "card": "Brubank",
+      "monthlyAmount": 18850.0,
+      "owner": "joel"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 73214.0,
+      "installments": 1,
+      "startDate": "2025-07-29",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 73214.0,
+      "owner": "joel"
+    },
+    {
+      "description": "queso y longaniza ",
+      "totalAmount": 46868.0,
+      "installments": 1,
+      "startDate": "2025-07-30",
+      "card": "Efectivo Joel",
+      "monthlyAmount": 46868.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 5400.0,
+      "installments": 1,
+      "startDate": "2025-07-30",
+      "card": "Brubank",
+      "monthlyAmount": 5400.0,
+      "owner": "joel"
+    },
+    {
+      "description": "muslos",
+      "totalAmount": 36000.0,
+      "installments": 1,
+      "startDate": "2025-08-01",
+      "card": "Prex Vir",
+      "monthlyAmount": 36000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "tapas de empanadas",
+      "totalAmount": 5100.0,
+      "installments": 1,
+      "startDate": "2025-08-01",
+      "card": "Brubank",
+      "monthlyAmount": 5100.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pan queso y huevos ",
+      "totalAmount": 14000.0,
+      "installments": 1,
+      "startDate": "2025-08-02",
+      "card": "Prex Vir",
+      "monthlyAmount": 14000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "Cabify ",
+      "totalAmount": 8300.0,
+      "installments": 1,
+      "startDate": "2025-08-01",
+      "card": "Prex Vir",
+      "monthlyAmount": 8300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "facturas y condimentos ",
+      "totalAmount": 6850.0,
+      "installments": 1,
+      "startDate": "2025-08-03",
+      "card": "Brubank",
+      "monthlyAmount": 6850.0,
+      "owner": "joel"
+    },
+    {
+      "description": "televisor",
+      "totalAmount": 309999.0,
+      "installments": 6,
+      "startDate": "2025-07-05",
+      "card": "Galicia Visa",
+      "monthlyAmount": 51666.5,
+      "owner": "joel"
+    },
+    {
+      "description": "condimentos ",
+      "totalAmount": 8350.0,
+      "installments": 1,
+      "startDate": "2025-08-06",
+      "card": "Prex Vir",
+      "monthlyAmount": 8350.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 5500.0,
+      "installments": 1,
+      "startDate": "2025-08-06",
+      "card": "Prex Vir",
+      "monthlyAmount": 5500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 3400.0,
+      "installments": 1,
+      "startDate": "2025-08-07",
+      "card": "Prex Vir",
+      "monthlyAmount": 3400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "jabón lavarropa y perfumina",
+      "totalAmount": 6500.0,
+      "installments": 1,
+      "startDate": "2025-08-08",
+      "card": "Prex Vir",
+      "monthlyAmount": 6500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "tomate ",
+      "totalAmount": 1500.0,
+      "installments": 1,
+      "startDate": "2025-08-08",
+      "card": "Prex Vir",
+      "monthlyAmount": 1500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "alitas + verdulería ",
+      "totalAmount": 10000.0,
+      "installments": 1,
+      "startDate": "2025-08-08",
+      "card": "Brubank",
+      "monthlyAmount": 10000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "coto",
+      "totalAmount": 101000.0,
+      "installments": 1,
+      "startDate": "2025-08-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 101000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "easy bisagra de baño y burlete",
+      "totalAmount": 32000.0,
+      "installments": 1,
+      "startDate": "2025-08-10",
+      "card": "Brubank",
+      "monthlyAmount": 32000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 2800.0,
+      "installments": 1,
+      "startDate": "2025-08-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 2800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "guia telescópica ",
+      "totalAmount": 8000.0,
+      "installments": 1,
+      "startDate": "2025-08-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 8000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "espinaca congelada ",
+      "totalAmount": 4900.0,
+      "installments": 1,
+      "startDate": "2025-08-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 4900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 2500.0,
+      "installments": 1,
+      "startDate": "2025-08-13",
+      "card": "Prex Vir",
+      "monthlyAmount": 2500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "rapiditas ",
+      "totalAmount": 2400.0,
+      "installments": 1,
+      "startDate": "2025-08-14",
+      "card": "Prex Vir",
+      "monthlyAmount": 2400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 31435.0,
+      "installments": 1,
+      "startDate": "2025-08-14",
+      "card": "Prex Vir",
+      "monthlyAmount": 31435.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "muslos de pollo",
+      "totalAmount": 35000.0,
+      "installments": 1,
+      "startDate": "2025-08-13",
+      "card": "Brubank",
+      "monthlyAmount": 35000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería ",
+      "totalAmount": 9550.0,
+      "installments": 1,
+      "startDate": "2025-08-14",
+      "card": "Brubank",
+      "monthlyAmount": 9550.0,
+      "owner": "joel"
+    },
+    {
+      "description": "huevos",
+      "totalAmount": 7700.0,
+      "installments": 1,
+      "startDate": "2025-08-14",
+      "card": "Brubank",
+      "monthlyAmount": 7700.0,
+      "owner": "joel"
+    },
+    {
+      "description": "alitas",
+      "totalAmount": 4700.0,
+      "installments": 1,
+      "startDate": "2025-08-14",
+      "card": "Brubank",
+      "monthlyAmount": 4700.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pan lactal ",
+      "totalAmount": 2580.0,
+      "installments": 1,
+      "startDate": "2025-08-18",
+      "card": "Prex Vir",
+      "monthlyAmount": 2580.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería",
+      "totalAmount": 7500.0,
+      "installments": 1,
+      "startDate": "2025-08-18",
+      "card": "Prex Vir",
+      "monthlyAmount": 7500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "estante cocina ",
+      "totalAmount": 16225.0,
+      "installments": 1,
+      "startDate": "2025-08-17",
+      "card": "Prex Vir",
+      "monthlyAmount": 16225.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "frascos condimentos",
+      "totalAmount": 65635.0,
+      "installments": 1,
+      "startDate": "2025-08-15",
+      "card": "Prex Vir",
+      "monthlyAmount": 65635.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "huevos y harina ",
+      "totalAmount": 8300.0,
+      "installments": 1,
+      "startDate": "2025-08-19",
+      "card": "Prex Vir",
+      "monthlyAmount": 8300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 56236.0,
+      "installments": 1,
+      "startDate": "2025-08-21",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 56236.0,
+      "owner": "joel"
+    },
+    {
+      "description": "gotitas",
+      "totalAmount": 14000.0,
+      "installments": 1,
+      "startDate": "2025-08-18",
+      "card": "Brubank",
+      "monthlyAmount": 14000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería",
+      "totalAmount": 6500.0,
+      "installments": 1,
+      "startDate": "2025-08-21",
+      "card": "Prex Vir",
+      "monthlyAmount": 6500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería",
+      "totalAmount": 7000.0,
+      "installments": 1,
+      "startDate": "2025-08-21",
+      "card": "Brubank",
+      "monthlyAmount": 7000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "dietética",
+      "totalAmount": 6000.0,
+      "installments": 1,
+      "startDate": "2025-08-21",
+      "card": "Brubank",
+      "monthlyAmount": 6000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pan",
+      "totalAmount": 6000.0,
+      "installments": 1,
+      "startDate": "2025-08-23",
+      "card": "Brubank",
+      "monthlyAmount": 6000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "jueguito",
+      "totalAmount": 8000.0,
+      "installments": 1,
+      "startDate": "2025-08-23",
+      "card": "Brubank",
+      "monthlyAmount": 8000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compra coto",
+      "totalAmount": 78900.0,
+      "installments": 1,
+      "startDate": "2025-08-23",
+      "card": "Brubank",
+      "monthlyAmount": 78900.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pan",
+      "totalAmount": 3800.0,
+      "installments": 1,
+      "startDate": "2025-08-23",
+      "card": "Brubank",
+      "monthlyAmount": 3800.0,
+      "owner": "joel"
+    },
+    {
+      "description": "croissant cafe",
+      "totalAmount": 40800.0,
+      "installments": 1,
+      "startDate": "2025-09-05",
+      "card": "Galicia Visa",
+      "monthlyAmount": 40800.0,
+      "owner": "joel"
+    },
+    {
+      "description": "muslo  y pechuga",
+      "totalAmount": 52000.0,
+      "installments": 1,
+      "startDate": "2025-08-29",
+      "card": "Prex Vir",
+      "monthlyAmount": 52000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "leche en polvo",
+      "totalAmount": 3300.0,
+      "installments": 1,
+      "startDate": "2025-08-25",
+      "card": "Prex Vir",
+      "monthlyAmount": 3300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "sanguche y empandas panaderia",
+      "totalAmount": 16000.0,
+      "installments": 1,
+      "startDate": "2025-08-23",
+      "card": "Prex Vir",
+      "monthlyAmount": 16000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 61869.0,
+      "installments": 1,
+      "startDate": "2025-07-26",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 61869.0,
+      "owner": "joel"
+    },
+    {
+      "description": "facturas",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2025-08-31",
+      "card": "Brubank",
+      "monthlyAmount": 3000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "provolleta",
+      "totalAmount": 6930.0,
+      "installments": 1,
+      "startDate": "2025-08-31",
+      "card": "Brubank",
+      "monthlyAmount": 6930.0,
+      "owner": "joel"
+    },
+    {
+      "description": "fiambre + manteca",
+      "totalAmount": 6800.0,
+      "installments": 1,
+      "startDate": "2025-08-31",
+      "card": "Brubank",
+      "monthlyAmount": 6800.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdu y huevos",
+      "totalAmount": 12400.0,
+      "installments": 1,
+      "startDate": "2025-09-01",
+      "card": "Prex Vir",
+      "monthlyAmount": 12400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "nafta",
+      "totalAmount": 39000.0,
+      "installments": 1,
+      "startDate": "2025-10-04",
+      "card": "Galicia Visa",
+      "monthlyAmount": 39000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "coto + vivero ",
+      "totalAmount": 126872.0,
+      "installments": 1,
+      "startDate": "2025-09-08",
+      "card": "Brubank",
+      "monthlyAmount": 126872.0,
+      "owner": "joel"
+    },
+    {
+      "description": "dos días de verdulería",
+      "totalAmount": 14200.0,
+      "installments": 1,
+      "startDate": "2025-09-09",
+      "card": "Prex Vir",
+      "monthlyAmount": 14200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "huevos",
+      "totalAmount": 6300.0,
+      "installments": 1,
+      "startDate": "2025-09-08",
+      "card": "Prex Vir",
+      "monthlyAmount": 6300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "condimentos",
+      "totalAmount": 9950.0,
+      "installments": 1,
+      "startDate": "2025-09-08",
+      "card": "Prex Vir",
+      "monthlyAmount": 9950.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pechugas y muslos",
+      "totalAmount": 51000.0,
+      "installments": 1,
+      "startDate": "2025-09-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 51000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "aspiradora",
+      "totalAmount": 250000.0,
+      "installments": 12,
+      "startDate": "2025-09-05",
+      "card": "BBVA Pablo",
+      "monthlyAmount": 20833.33,
+      "owner": "virginia"
+    },
+    {
+      "description": "queso + huevos",
+      "totalAmount": 31880.0,
+      "installments": 1,
+      "startDate": "2025-09-18",
+      "card": "Brubank",
+      "monthlyAmount": 31880.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria ",
+      "totalAmount": 6000.0,
+      "installments": 1,
+      "startDate": "2025-09-18",
+      "card": "Brubank",
+      "monthlyAmount": 6000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "helado",
+      "totalAmount": 10850.0,
+      "installments": 1,
+      "startDate": "2025-09-14",
+      "card": "Brubank",
+      "monthlyAmount": 10850.0,
+      "owner": "joel"
+    },
+    {
+      "description": "almohadas",
+      "totalAmount": 70082.0,
+      "installments": 1,
+      "startDate": "2025-09-11",
+      "card": "Brubank",
+      "monthlyAmount": 70082.0,
+      "owner": "joel"
+    },
+    {
+      "description": "carniceria",
+      "totalAmount": 12526.0,
+      "installments": 1,
+      "startDate": "2025-09-09",
+      "card": "Brubank",
+      "monthlyAmount": 12526.0,
+      "owner": "joel"
+    },
+    {
+      "description": "dietetica",
+      "totalAmount": 1500.0,
+      "installments": 1,
+      "startDate": "2025-09-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 1500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verdulería",
+      "totalAmount": 4640.0,
+      "installments": 1,
+      "startDate": "2025-09-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 4640.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 29000.0,
+      "installments": 1,
+      "startDate": "2025-09-11",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 29000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería",
+      "totalAmount": 2500.0,
+      "installments": 1,
+      "startDate": "2025-09-12",
+      "card": "Prex Vir",
+      "monthlyAmount": 2500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "huevos",
+      "totalAmount": 6000.0,
+      "installments": 1,
+      "startDate": "2025-09-13",
+      "card": "Prex Vir",
+      "monthlyAmount": 6000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "papas fritas rappi",
+      "totalAmount": 4400.0,
+      "installments": 1,
+      "startDate": "2025-09-14",
+      "card": "Prex Vir",
+      "monthlyAmount": 4400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan lactal",
+      "totalAmount": 2400.0,
+      "installments": 1,
+      "startDate": "2025-09-15",
+      "card": "Prex Vir",
+      "monthlyAmount": 2400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 8000.0,
+      "installments": 1,
+      "startDate": "2025-09-16",
+      "card": "Prex Vir",
+      "monthlyAmount": 8000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 53000.0,
+      "installments": 1,
+      "startDate": "2025-09-16",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 53000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "dietetica",
+      "totalAmount": 4000.0,
+      "installments": 1,
+      "startDate": "2025-09-18",
+      "card": "Prex Vir",
+      "monthlyAmount": 4000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 45531.0,
+      "installments": 1,
+      "startDate": "2025-09-21",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 45531.0,
+      "owner": "joel"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 1500.0,
+      "installments": 1,
+      "startDate": "2025-09-21",
+      "card": "Prex Vir",
+      "monthlyAmount": 1500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 20000.0,
+      "installments": 1,
+      "startDate": "2025-09-23",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 20000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verdulería",
+      "totalAmount": 4300.0,
+      "installments": 1,
+      "startDate": "2025-09-24",
+      "card": "Prex Vir",
+      "monthlyAmount": 4300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 5200.0,
+      "installments": 1,
+      "startDate": "2025-09-24",
+      "card": "Prex Vir",
+      "monthlyAmount": 5200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "helado",
+      "totalAmount": 29699.0,
+      "installments": 1,
+      "startDate": "2025-09-28",
+      "card": "Prex Vir",
+      "monthlyAmount": 29699.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "polleria",
+      "totalAmount": 6900.0,
+      "installments": 1,
+      "startDate": "2025-09-29",
+      "card": "Prex Vir",
+      "monthlyAmount": 6900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "rawer bolti",
+      "totalAmount": 130000.0,
+      "installments": 1,
+      "startDate": "2025-09-23",
+      "card": "BBVA Vir",
+      "monthlyAmount": 130000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 71338.0,
+      "installments": 1,
+      "startDate": "2025-10-02",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 71338.0,
+      "owner": "joel"
+    },
+    {
+      "description": "dietetica",
+      "totalAmount": 5300.0,
+      "installments": 1,
+      "startDate": "2025-10-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 5300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 7800.0,
+      "installments": 1,
+      "startDate": "2025-10-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 7800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "polleria",
+      "totalAmount": 12000.0,
+      "installments": 1,
+      "startDate": "2025-10-03",
+      "card": "Prex Vir",
+      "monthlyAmount": 12000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carniceria",
+      "totalAmount": 21573.0,
+      "installments": 1,
+      "startDate": "2025-10-01",
+      "card": "Brubank",
+      "monthlyAmount": 21573.0,
+      "owner": "joel"
+    },
+    {
+      "description": "finde en las sierras",
+      "totalAmount": 92000.0,
+      "installments": 1,
+      "startDate": "2025-10-09",
+      "card": "Brubank",
+      "monthlyAmount": 92000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 5000.0,
+      "installments": 1,
+      "startDate": "2025-10-07",
+      "card": "Brubank",
+      "monthlyAmount": 5000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "dietetica joel",
+      "totalAmount": 3100.0,
+      "installments": 1,
+      "startDate": "2025-10-07",
+      "card": "Brubank",
+      "monthlyAmount": 3100.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria abel",
+      "totalAmount": 6200.0,
+      "installments": 1,
+      "startDate": "2025-10-08",
+      "card": "Brubank",
+      "monthlyAmount": 6200.0,
+      "owner": "joel"
+    },
+    {
+      "description": "chinos",
+      "totalAmount": 7000.0,
+      "installments": 1,
+      "startDate": "2025-10-09",
+      "card": "Brubank",
+      "monthlyAmount": 7000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "despensa",
+      "totalAmount": 13100.0,
+      "installments": 1,
+      "startDate": "2025-10-09",
+      "card": "Brubank",
+      "monthlyAmount": 13100.0,
+      "owner": "joel"
+    },
+    {
+      "description": "antonucci",
+      "totalAmount": 21660.0,
+      "installments": 1,
+      "startDate": "2025-10-12",
+      "card": "Brubank",
+      "monthlyAmount": 21660.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2025-10-12",
+      "card": "Brubank",
+      "monthlyAmount": 3000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "compras",
+      "totalAmount": 32300.0,
+      "installments": 1,
+      "startDate": "2025-10-12",
+      "card": "Brubank",
+      "monthlyAmount": 32300.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2025-10-07",
+      "card": "Prex Vir",
+      "monthlyAmount": 3000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 25305.0,
+      "installments": 1,
+      "startDate": "2025-10-09",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 25305.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pechugas",
+      "totalAmount": 7600.0,
+      "installments": 1,
+      "startDate": "2025-10-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 7600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "huevos y pan",
+      "totalAmount": 12600.0,
+      "installments": 1,
+      "startDate": "2025-10-13",
+      "card": "Prex Vir",
+      "monthlyAmount": 12600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 6800.0,
+      "installments": 1,
+      "startDate": "2025-10-15",
+      "card": "Prex Vir",
+      "monthlyAmount": 6800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "parte 1 escritorio vir",
+      "totalAmount": 115000.0,
+      "installments": 1,
+      "startDate": "2025-10-15",
+      "card": "Prex Vir",
+      "monthlyAmount": 115000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "parte 2 escritorio vir",
+      "totalAmount": 224200.0,
+      "installments": 1,
+      "startDate": "2025-10-15",
+      "card": "Brubank",
+      "monthlyAmount": 224200.0,
+      "owner": "joel"
+    },
+    {
+      "description": "arbol navidad",
+      "totalAmount": 160000.0,
+      "installments": 3,
+      "startDate": "2025-10-15",
+      "card": "Mercado pago Credito",
+      "monthlyAmount": 53333.33,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 29000.0,
+      "installments": 1,
+      "startDate": "2025-10-21",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 29000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pollería",
+      "totalAmount": 9400.0,
+      "installments": 1,
+      "startDate": "2025-10-21",
+      "card": "Prex Vir",
+      "monthlyAmount": 9400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 9100.0,
+      "installments": 1,
+      "startDate": "2025-10-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 9100.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "condimentos",
+      "totalAmount": 12200.0,
+      "installments": 1,
+      "startDate": "2025-10-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 12200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 26000.0,
+      "installments": 1,
+      "startDate": "2025-10-16",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 26000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 24693.0,
+      "installments": 1,
+      "startDate": "2025-10-30",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 24693.0,
+      "owner": "joel"
+    },
+    {
+      "description": "musgo plantitas",
+      "totalAmount": 23175.0,
+      "installments": 1,
+      "startDate": "2025-10-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 23175.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 4100.0,
+      "installments": 1,
+      "startDate": "2025-10-25",
+      "card": "Prex Vir",
+      "monthlyAmount": 4100.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "rapiditas ",
+      "totalAmount": 2400.0,
+      "installments": 1,
+      "startDate": "2025-10-23",
+      "card": "Prex Vir",
+      "monthlyAmount": 2400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pechuga y maples",
+      "totalAmount": 40000.0,
+      "installments": 1,
+      "startDate": "2025-10-24",
+      "card": "Prex Vir",
+      "monthlyAmount": 40000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "antonucci",
+      "totalAmount": 13000.0,
+      "installments": 1,
+      "startDate": "2025-10-19",
+      "card": "Efectivo Vir",
+      "monthlyAmount": 13000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pechuga",
+      "totalAmount": 10000.0,
+      "installments": 1,
+      "startDate": "2025-10-23",
+      "card": "Prex Vir",
+      "monthlyAmount": 10000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "tequeños",
+      "totalAmount": 29700.0,
+      "installments": 1,
+      "startDate": "2025-10-24",
+      "card": "Prex Vir",
+      "monthlyAmount": 29700.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 35200.0,
+      "installments": 1,
+      "startDate": "2025-11-04",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 35200.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 6000.0,
+      "installments": 1,
+      "startDate": "2025-11-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 6000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carne y maple huevos",
+      "totalAmount": 21361.0,
+      "installments": 1,
+      "startDate": "2025-11-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 21361.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "temu",
+      "totalAmount": 63812.0,
+      "installments": 1,
+      "startDate": "2025-10-15",
+      "card": "BBVA Vir",
+      "monthlyAmount": 63812.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "comida bolt rawer",
+      "totalAmount": 139060.0,
+      "installments": 1,
+      "startDate": "2025-11-29",
+      "card": "BBVA Vir",
+      "monthlyAmount": 139060.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "gastos con debito noviembre c:",
+      "totalAmount": 275880.0,
+      "installments": 1,
+      "startDate": "2025-11-25",
+      "card": "Brubank",
+      "monthlyAmount": 275880.0,
+      "owner": "joel"
+    },
+    {
+      "description": "veterinaria",
+      "totalAmount": 33500.0,
+      "installments": 1,
+      "startDate": "2025-12-06",
+      "card": "Galicia Visa",
+      "monthlyAmount": 33500.0,
+      "owner": "joel"
+    },
+    {
+      "description": "nafta",
+      "totalAmount": 37400.0,
+      "installments": 1,
+      "startDate": "2025-12-06",
+      "card": "Galicia Visa",
+      "monthlyAmount": 37400.0,
+      "owner": "joel"
+    },
+    {
+      "description": "rapiditas + pan lactal",
+      "totalAmount": 5800.0,
+      "installments": 1,
+      "startDate": "2026-01-19",
+      "card": "Prex Vir",
+      "monthlyAmount": 5800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "coto",
+      "totalAmount": 112525.0,
+      "installments": 1,
+      "startDate": "2026-01-18",
+      "card": "Mercado pago Vir ",
+      "monthlyAmount": 112525.0,
+      "owner": "joel"
+    },
+    {
+      "description": "queso",
+      "totalAmount": 5005.0,
+      "installments": 1,
+      "startDate": "2026-01-17",
+      "card": "Prex Vir",
+      "monthlyAmount": 5005.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "prepizzas",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2026-01-17",
+      "card": "Prex Vir",
+      "monthlyAmount": 3000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 5000.0,
+      "installments": 1,
+      "startDate": "2026-01-17",
+      "card": "Prex Vir",
+      "monthlyAmount": 5000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pollo y maple",
+      "totalAmount": 43000.0,
+      "installments": 1,
+      "startDate": "2026-01-14",
+      "card": "Prex Vir",
+      "monthlyAmount": 43000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 24380.0,
+      "installments": 1,
+      "startDate": "2026-01-13",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 24380.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 1200.0,
+      "installments": 1,
+      "startDate": "2026-01-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 1200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 1500.0,
+      "installments": 1,
+      "startDate": "2026-01-09",
+      "card": "Prex Vir",
+      "monthlyAmount": 1500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 18100.0,
+      "installments": 1,
+      "startDate": "2026-01-13",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 18100.0,
+      "owner": "joel"
+    },
+    {
+      "description": "pollo y maple",
+      "totalAmount": 43000.0,
+      "installments": 1,
+      "startDate": "2026-01-06",
+      "card": "Prex Vir",
+      "monthlyAmount": 43000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "makro",
+      "totalAmount": 13137.0,
+      "installments": 1,
+      "startDate": "2026-01-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 13137.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "tequeños",
+      "totalAmount": 36400.0,
+      "installments": 1,
+      "startDate": "2026-01-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 36400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "coto",
+      "totalAmount": 188433.0,
+      "installments": 1,
+      "startDate": "2026-01-02",
+      "card": "Brubank",
+      "monthlyAmount": 188433.0,
+      "owner": "joel"
+    },
+    {
+      "description": "despensa",
+      "totalAmount": 2650.0,
+      "installments": 1,
+      "startDate": "2026-01-02",
+      "card": "Brubank",
+      "monthlyAmount": 2650.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria ",
+      "totalAmount": 2000.0,
+      "installments": 1,
+      "startDate": "2026-01-04",
+      "card": "Brubank",
+      "monthlyAmount": 2000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "despensa",
+      "totalAmount": 4500.0,
+      "installments": 1,
+      "startDate": "2026-01-05",
+      "card": "Brubank",
+      "monthlyAmount": 4500.0,
+      "owner": "joel"
+    },
+    {
+      "description": "carniceria",
+      "totalAmount": 7600.0,
+      "installments": 1,
+      "startDate": "2026-01-05",
+      "card": "Brubank",
+      "monthlyAmount": 7600.0,
+      "owner": "joel"
+    },
+    {
+      "description": "despensa",
+      "totalAmount": 5000.0,
+      "installments": 1,
+      "startDate": "2026-01-09",
+      "card": "Brubank",
+      "monthlyAmount": 5000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "despensa",
+      "totalAmount": 4200.0,
+      "installments": 1,
+      "startDate": "2026-01-14",
+      "card": "Brubank",
+      "monthlyAmount": 4200.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 4800.0,
+      "installments": 1,
+      "startDate": "2026-01-14",
+      "card": "Brubank",
+      "monthlyAmount": 4800.0,
+      "owner": "joel"
+    },
+    {
+      "description": "queso cremac",
+      "totalAmount": 28832.0,
+      "installments": 1,
+      "startDate": "2026-01-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 28832.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pollo y maple",
+      "totalAmount": 45000.0,
+      "installments": 1,
+      "startDate": "2026-01-23",
+      "card": "Brubank",
+      "monthlyAmount": 45000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "milas pollo",
+      "totalAmount": 10500.0,
+      "installments": 1,
+      "startDate": "2026-01-22",
+      "card": "Prex Vir",
+      "monthlyAmount": 10500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "talco",
+      "totalAmount": 4900.0,
+      "installments": 1,
+      "startDate": "2026-01-22",
+      "card": "Prex Vir",
+      "monthlyAmount": 4900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "higado",
+      "totalAmount": 5000.0,
+      "installments": 1,
+      "startDate": "2026-01-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 5000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pollo y maple",
+      "totalAmount": 45000.0,
+      "installments": 1,
+      "startDate": "2026-01-29",
+      "card": "Prex Vir",
+      "monthlyAmount": 45000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 2650.0,
+      "installments": 1,
+      "startDate": "2026-01-28",
+      "card": "Prex Vir",
+      "monthlyAmount": 2650.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carne",
+      "totalAmount": 15355.0,
+      "installments": 1,
+      "startDate": "2026-01-28",
+      "card": "Prex Vir",
+      "monthlyAmount": 15355.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 7000.0,
+      "installments": 1,
+      "startDate": "2026-01-28",
+      "card": "Prex Vir",
+      "monthlyAmount": 7000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 25502.0,
+      "installments": 1,
+      "startDate": "2026-01-27",
+      "card": "Carrefour débito ",
+      "monthlyAmount": 25502.0,
+      "owner": "joel"
+    },
+    {
+      "description": "hamburguesas en makro",
+      "totalAmount": 11460.0,
+      "installments": 1,
+      "startDate": "2026-01-24",
+      "card": "Brubank",
+      "monthlyAmount": 11460.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 4700.0,
+      "installments": 1,
+      "startDate": "2026-01-27",
+      "card": "Brubank",
+      "monthlyAmount": 4700.0,
+      "owner": "joel"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 4000.0,
+      "installments": 1,
+      "startDate": "2026-01-27",
+      "card": "Brubank",
+      "monthlyAmount": 4000.0,
+      "owner": "joel"
+    },
+    {
+      "description": "verduleria ",
+      "totalAmount": 3400.0,
+      "installments": 1,
+      "startDate": "2026-02-02",
+      "card": "Prex Vir",
+      "monthlyAmount": 3400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan",
+      "totalAmount": 2000.0,
+      "installments": 1,
+      "startDate": "2026-02-03",
+      "card": "Prex Vir",
+      "monthlyAmount": 2000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 11850.0,
+      "installments": 1,
+      "startDate": "2026-02-03",
+      "card": "Prex Vir",
+      "monthlyAmount": 11850.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan y rapiditas",
+      "totalAmount": 5500.0,
+      "installments": 1,
+      "startDate": "2026-02-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 5500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria ",
+      "totalAmount": 4400.0,
+      "installments": 1,
+      "startDate": "2026-02-04",
+      "card": "Prex Vir",
+      "monthlyAmount": 4400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carrefour ",
+      "totalAmount": 21000.0,
+      "installments": 1,
+      "startDate": "2026-02-05",
+      "card": "Prex Vir",
+      "monthlyAmount": 21000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "dietetica",
+      "totalAmount": 4500.0,
+      "installments": 1,
+      "startDate": "2026-02-06",
+      "card": "Prex Vir",
+      "monthlyAmount": 4500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "rapiditas",
+      "totalAmount": 1600.0,
+      "installments": 1,
+      "startDate": "2026-02-09",
+      "card": "Prex Vir",
+      "monthlyAmount": 1600.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "soporte tv",
+      "totalAmount": 26000.0,
+      "installments": 1,
+      "startDate": "2026-02-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 26000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan",
+      "totalAmount": 2900.0,
+      "installments": 1,
+      "startDate": "2026-02-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 2900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carnicería",
+      "totalAmount": 12500.0,
+      "installments": 1,
+      "startDate": "2026-02-10",
+      "card": "Prex Vir",
+      "monthlyAmount": 12500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "papel mueble ",
+      "totalAmount": 4800.0,
+      "installments": 1,
+      "startDate": "2026-02-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 4800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "croissant",
+      "totalAmount": 35000.0,
+      "installments": 1,
+      "startDate": "2026-02-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 35000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 1900.0,
+      "installments": 1,
+      "startDate": "2026-02-11",
+      "card": "Prex Vir",
+      "monthlyAmount": 1900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "mercado",
+      "totalAmount": 9500.0,
+      "installments": 1,
+      "startDate": "2026-02-15",
+      "card": "Prex Vir",
+      "monthlyAmount": 9500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "mercado",
+      "totalAmount": 3900.0,
+      "installments": 1,
+      "startDate": "2026-02-18",
+      "card": "Prex Vir",
+      "monthlyAmount": 3900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "soporte tv living",
+      "totalAmount": 89700.0,
+      "installments": 3,
+      "startDate": "2026-02-19",
+      "card": "Mercado pago Credito",
+      "monthlyAmount": 29900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "farmacia",
+      "totalAmount": 3500.0,
+      "installments": 1,
+      "startDate": "2026-02-19",
+      "card": "Prex Vir",
+      "monthlyAmount": 3500.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 1300.0,
+      "installments": 1,
+      "startDate": "2026-02-19",
+      "card": "Prex Vir",
+      "monthlyAmount": 1300.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "almacen",
+      "totalAmount": 1200.0,
+      "installments": 1,
+      "startDate": "2026-02-20",
+      "card": "Prex Vir",
+      "monthlyAmount": 1200.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "protector de tension",
+      "totalAmount": 20322.0,
+      "installments": 1,
+      "startDate": "2026-02-22",
+      "card": "Prex Vir",
+      "monthlyAmount": 20322.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 2400.0,
+      "installments": 1,
+      "startDate": "2026-02-23",
+      "card": "Prex Vir",
+      "monthlyAmount": 2400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "farmacia",
+      "totalAmount": 4000.0,
+      "installments": 1,
+      "startDate": "2026-02-25",
+      "card": "Prex Vir",
+      "monthlyAmount": 4000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "panaderia",
+      "totalAmount": 7000.0,
+      "installments": 1,
+      "startDate": "2026-02-25",
+      "card": "Prex Vir",
+      "monthlyAmount": 7000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "mercado",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2026-02-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 3000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "mercado",
+      "totalAmount": 4380.0,
+      "installments": 1,
+      "startDate": "2026-02-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 4380.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "verduleria",
+      "totalAmount": 2400.0,
+      "installments": 1,
+      "startDate": "2026-02-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 2400.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "carne",
+      "totalAmount": 16800.0,
+      "installments": 1,
+      "startDate": "2026-02-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 16800.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan",
+      "totalAmount": 2900.0,
+      "installments": 1,
+      "startDate": "2026-02-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 2900.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "pan rayado",
+      "totalAmount": 3000.0,
+      "installments": 1,
+      "startDate": "2026-02-26",
+      "card": "Prex Vir",
+      "monthlyAmount": 3000.0,
+      "owner": "virginia"
+    },
+    {
+      "description": "maple huevos",
+      "totalAmount": 13000.0,
+      "installments": 1,
+      "startDate": "2026-02-27",
+      "card": "Prex Vir",
+      "monthlyAmount": 13000.0,
+      "owner": "virginia"
+    }
+  ],
+  "recurrentes": [
+    {
+      "description": "Alquiler",
+      "amount": 558000.0,
+      "responsible": "Joel",
+      "owner": "joel"
+    },
+    {
+      "description": "Expensas",
+      "amount": 60826.0,
+      "responsible": "Virginia",
+      "owner": "virginia"
+    },
+    {
+      "description": "Luz",
+      "amount": 26300.0,
+      "responsible": "Virginia",
+      "owner": "virginia"
+    },
+    {
+      "description": "Gas",
+      "amount": 15240.0,
+      "responsible": "Virginia",
+      "owner": "virginia"
+    },
+    {
+      "description": "Agua",
+      "amount": 17201.12,
+      "responsible": "Virginia",
+      "owner": "virginia"
+    },
+    {
+      "description": "Internet",
+      "amount": 22000.0,
+      "responsible": "Joel",
+      "owner": "joel"
+    },
+    {
+      "description": "Seguro de la casa",
+      "amount": 10581.0,
+      "responsible": "Joel",
+      "owner": "joel"
+    },
+    {
+      "description": "Seguro del auto",
+      "amount": 137000.0,
+      "responsible": "Joel",
+      "owner": "joel"
+    },
+    {
+      "description": "Cochera",
+      "amount": 60000.0,
+      "responsible": "Joel",
+      "owner": "joel"
+    }
+  ]
+}

@@ -95,11 +95,18 @@ export default function ExpensesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [filterCat, setFilterCat] = useState("");
+  const [filterMonth, setFilterMonth] = useState(() => new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState(() => new Date().getFullYear());
+  const [rawDesc, setRawDesc] = useState("");
+  const [filterDesc, setFilterDesc] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const LIMIT = 25;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedShareId, setExpandedShareId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadExpenses();
     fetch("/api/categories").then((r) => r.json()).then(setCategories);
     fetch("/api/credit-cards").then((r) => r.json()).then(setCreditCards);
     fetch("/api/auth/users").then((r) => r.ok ? r.json() : []).then((d) => setUsers(Array.isArray(d) ? d : []));
@@ -107,15 +114,55 @@ export default function ExpensesPage() {
     fetch("/api/groups").then((r) => r.ok ? r.json() : []).then((d) => setGroups(Array.isArray(d) ? d : []));
   }, []);
 
+  // Debounce description input
+  useEffect(() => {
+    const t = setTimeout(() => setFilterDesc(rawDesc), 400);
+    return () => clearTimeout(t);
+  }, [rawDesc]);
+
+  // Reset to page 1 when any filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [filterMonth, filterYear, filterCat, filterDesc]);
+
+  // Load expenses when page or filters change
   useEffect(() => {
     loadExpenses();
-  }, [filterCat]);
+  }, [filterMonth, filterYear, filterCat, filterDesc, page]);
 
   function loadExpenses() {
     const params = new URLSearchParams();
+    params.set("month", String(filterMonth));
+    params.set("year", String(filterYear));
     if (filterCat) params.set("categoryId", filterCat);
-    fetch(`/api/expenses?${params}`).then((r) => r.json()).then(setExpenses);
+    if (filterDesc.trim()) params.set("description", filterDesc.trim());
+    params.set("page", String(page));
+    params.set("limit", String(LIMIT));
+    fetch(`/api/expenses?${params}`)
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.data && res.meta) {
+          setExpenses(res.data);
+          setTotalPages(res.meta.totalPages);
+          setTotalCount(res.meta.total);
+        } else {
+          // fallback for unexpected shape
+          setExpenses(Array.isArray(res) ? res : []);
+        }
+      });
   }
+
+  function prevMonth() {
+    if (filterMonth === 1) { setFilterMonth(12); setFilterYear((y) => y - 1); }
+    else setFilterMonth((m) => m - 1);
+  }
+
+  function nextMonth() {
+    if (filterMonth === 12) { setFilterMonth(1); setFilterYear((y) => y + 1); }
+    else setFilterMonth((m) => m + 1);
+  }
+
+  const monthLabel = new Date(filterYear, filterMonth - 1).toLocaleDateString("es", { month: "long", year: "numeric" });
 
   function toggleParticipant(user: User, checked: boolean) {
     if (form.splitMode === "auto") {
@@ -608,23 +655,64 @@ export default function ExpensesPage() {
 
       {/* ── Expense list ── */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 flex items-center justify-between gap-4">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Lista de Gastos</h2>
-          <select
-            value={filterCat}
-            onChange={(e) => setFilterCat(e.target.value)}
-            className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100"
-          >
-            <option value="">Todas las categorías</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+        <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Lista de Gastos</h2>
+            {totalCount > 0 && (
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {totalCount} {totalCount === 1 ? "gasto" : "gastos"}
+              </span>
+            )}
+          </div>
+          {/* Filter bar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Month picker */}
+            <div className="flex items-center gap-1 border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-700">
+              <button
+                type="button"
+                onClick={prevMonth}
+                className="px-2.5 py-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600 transition min-w-[36px]"
+                aria-label="Mes anterior"
+              >
+                ‹
+              </button>
+              <span className="px-1 text-xs font-medium text-gray-700 dark:text-gray-200 capitalize whitespace-nowrap">
+                {monthLabel}
+              </span>
+              <button
+                type="button"
+                onClick={nextMonth}
+                className="px-2.5 py-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600 transition min-w-[36px]"
+                aria-label="Mes siguiente"
+              >
+                ›
+              </button>
+            </div>
+            {/* Category filter */}
+            <select
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
+              className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">Todas las categorías</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {/* Description search */}
+            <input
+              type="search"
+              placeholder="Buscar descripción..."
+              value={rawDesc}
+              onChange={(e) => setRawDesc(e.target.value)}
+              className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 min-w-[160px]"
+            />
+          </div>
         </div>
 
         {expenses.length === 0 ? (
           <p className="p-8 text-center text-sm text-gray-400 dark:text-gray-500">
-            No hay gastos registrados
+            No hay gastos para los filtros seleccionados
           </p>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -785,6 +873,55 @@ export default function ExpensesPage() {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-5 py-3.5 border-t border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              Mostrando {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, totalCount)} de {totalCount}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-2.5 py-1.5 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-40 transition"
+              >
+                ‹
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  item === "..." ? (
+                    <span key={`ellipsis-${idx}`} className="px-1 text-xs text-gray-400">…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setPage(item as number)}
+                      className={`px-2.5 py-1.5 text-xs rounded-md border transition ${
+                        page === item
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-2.5 py-1.5 text-xs rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-40 transition"
+              >
+                ›
+              </button>
+            </div>
           </div>
         )}
       </div>

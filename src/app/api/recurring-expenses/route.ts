@@ -61,12 +61,21 @@ async function createRecurringShares(
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
+  const url = new URL(req.url);
+  const categoryId = url.searchParams.get("categoryId");
+  const activeParam = url.searchParams.get("active"); // "true" | "false" | null
+
+  const where: Record<string, unknown> = { userId: session.id };
+  if (categoryId) where.categoryId = categoryId;
+  if (activeParam === "true") where.active = true;
+  if (activeParam === "false") where.active = false;
+
   const recurring = await prisma.recurringExpense.findMany({
-    where: { userId: session.id },
+    where,
     include: {
       category: { select: { id: true, name: true, color: true } },
       creditCard: { select: { id: true, name: true } },

@@ -25,7 +25,19 @@
       "Bash(pip install:*)",
       "Bash(py -m pip install openpyxl pandas -q)",
       "Bash(py -c \":*)",
-      "Bash(grep -r \"toFixed\\\\|toLocaleString\" d:Proyectosexpense-tracker-ocr-master/src --include=*.tsx --include=*.ts -n)"
+      "Bash(grep -r \"toFixed\\\\|toLocaleString\" d:Proyectosexpense-tracker-ocr-master/src --include=*.tsx --include=*.ts -n)",
+      "Read(//c/Users/leand/.agents/skills/ui-ux-pro-max/**)",
+      "Bash(python scripts/search.py \"personal finance household shared expenses dashboard fintech minimal\" --design-system -f markdown)",
+      "Bash(dir \"C:\\\\Users\\\\leand\\\\.claude\\\\skills\\\\ui-ux-pro-max\")",
+      "Bash(cmd /c \"dir /s /b \"\"C:\\\\Users\\\\leand\\\\.claude\\\\skills\\\\ui-ux-pro-max\"\" 2>&1 | head -30\")",
+      "Bash(cmd /c \"dir /s /b \"\"C:\\\\Users\\\\leand\\\\.claude\\\\skills\\\\ui-ux-pro-max\"\"\")",
+      "Bash(cmd /c \"dir \"\"C:\\\\Users\\\\leand\\\\.claude\\\\skills\\\\ui-ux-pro-max\"\" /s /b\")",
+      "Bash(cmd /c \"dir \"\"C:\\\\Users\\\\leand\\\\.claude\\\\src\\\\ui-ux-pro-max\\\\scripts\"\"\")",
+      "Bash(node -e \":*)",
+      "Bash(ls -la \"d:/Proyectos/expense-tracker-ocr-master/src/app/\\(dashboard\\)/dashboard/\")",
+      "Bash(ls -la \"d:/Proyectos/expense-tracker-ocr-master/src/app/\\(dashboard\\)/dashboard/groups/\")",
+      "Bash(python \"C:\\\\Users\\\\leand\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"financial expense tracker dashboard SaaS dark mode\" --design-system -f markdown -p \"ExpenseTracker\")",
+      "Bash(npx tsc:*)"
     ]
   }
 }

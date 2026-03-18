@@ -40,6 +40,8 @@ export default function GroupsPage() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [syncingGroupId, setSyncingGroupId] = useState<string | null>(null);
+  const [syncWarnings, setSyncWarnings] = useState<{ groupId: string; warnings: string[] } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -133,6 +135,25 @@ export default function GroupsPage() {
     if (!confirm("Eliminar este grupo? Los gastos asociados se desvincularan.")) return;
     await fetch(`/api/groups/${id}`, { method: "DELETE" });
     loadGroups();
+  }
+
+  async function handleSync(groupId: string) {
+    setSyncingGroupId(groupId);
+    setSyncWarnings(null);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/sync-percentages`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Error al sincronizar");
+        return;
+      }
+      if (data.warnings?.length > 0) {
+        setSyncWarnings({ groupId, warnings: data.warnings });
+      }
+      loadGroups();
+    } finally {
+      setSyncingGroupId(null);
+    }
   }
 
   function handleEdit(group: Group) {
@@ -299,13 +320,31 @@ export default function GroupsPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <button
-                        onClick={() => router.push(`/dashboard/groups/${group.id}`)}
+                        onClick={() => router.push("/dashboard/home")}
                         className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
                       >
-                        Detalle
+                        Ver resumen
                       </button>
                       {group.ownerId === currentUserId && (
                         <>
+                          <button
+                            onClick={() => handleSync(group.id)}
+                            disabled={syncingGroupId === group.id}
+                            className="flex items-center gap-1 text-sm px-2 py-1 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/40 disabled:opacity-50 transition-colors"
+                            title="Sincronizar porcentajes con ingresos del mes actual"
+                          >
+                            {syncingGroupId === group.id ? (
+                              <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                              </svg>
+                            ) : (
+                              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            )}
+                            Sync %
+                          </button>
                           <button
                             onClick={() => handleEdit(group)}
                             className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
@@ -322,6 +361,21 @@ export default function GroupsPage() {
                       )}
                     </div>
                   </div>
+                  {syncWarnings?.groupId === group.id && (
+                    <div className="mt-2 flex items-start justify-between gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400">
+                      <span>
+                        Sin ingreso registrado este mes (se usó reparto igual):{" "}
+                        <strong>{syncWarnings.warnings.join(", ")}</strong>
+                      </span>
+                      <button
+                        onClick={() => setSyncWarnings(null)}
+                        className="shrink-0 hover:opacity-70"
+                        aria-label="Cerrar aviso"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
 
               </div>

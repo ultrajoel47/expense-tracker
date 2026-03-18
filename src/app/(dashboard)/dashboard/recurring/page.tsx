@@ -89,9 +89,10 @@ export default function RecurringPage() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [filterCat, setFilterCat] = useState("");
+  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
 
   useEffect(() => {
-    loadAll();
     fetch("/api/categories").then((r) => r.json()).then(setCategories);
     fetch("/api/credit-cards").then((r) => r.json()).then(setCreditCards);
     fetch("/api/auth/users").then((r) => r.ok ? r.json() : []).then((d) => setUsers(Array.isArray(d) ? d : []));
@@ -99,8 +100,16 @@ export default function RecurringPage() {
     fetch("/api/groups").then((r) => r.ok ? r.json() : []).then((d) => setGroups(Array.isArray(d) ? d : []));
   }, []);
 
+  useEffect(() => {
+    loadAll();
+  }, [filterCat, filterActive]);
+
   function loadAll() {
-    fetch("/api/recurring-expenses").then((r) => r.json()).then(setRecurring);
+    const params = new URLSearchParams();
+    if (filterCat) params.set("categoryId", filterCat);
+    if (filterActive === "active") params.set("active", "true");
+    if (filterActive === "inactive") params.set("active", "false");
+    fetch(`/api/recurring-expenses?${params}`).then((r) => r.json()).then((d) => setRecurring(Array.isArray(d) ? d : []));
   }
 
   function toggleParticipant(user: User, checked: boolean) {
@@ -483,45 +492,93 @@ export default function RecurringPage() {
       </form>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700">
-        <div className="p-4 border-b dark:border-gray-700">
+        <div className="p-4 border-b dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold">Recurrentes Registrados</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Category filter */}
+            <select
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
+              className="px-3 py-1.5 text-sm border dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100"
+            >
+              <option value="">Todas las categorías</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {/* Active/inactive segmented toggle */}
+            <div className="flex rounded-lg border dark:border-gray-600 overflow-hidden text-sm">
+              {(["all", "active", "inactive"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setFilterActive(opt)}
+                  className={`px-3 py-1.5 transition-colors ${
+                    filterActive === opt
+                      ? "bg-indigo-600 text-white"
+                      : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {opt === "all" ? "Todos" : opt === "active" ? "Activos" : "Pausados"}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {recurring.length === 0 ? (
-          <p className="p-6 text-gray-400 text-sm">No hay gastos recurrentes.</p>
+          <p className="p-6 text-gray-400 text-sm">No hay gastos recurrentes con los filtros aplicados.</p>
         ) : (
-          <div className="divide-y dark:divide-gray-700">
-            {recurring.map((rec) => (
-              <div key={rec.id} className={`p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!rec.active ? "opacity-50" : ""}`}>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: rec.category.color }} />
-                  <div>
-                    <p className="font-medium">{rec.description}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {rec.category.name}
-                      {rec.creditCard && <> · {rec.creditCard.name}</>}
-                      {" · "}{FREQ_LABELS[rec.frequency]}
-                      {" · "}Prox: {new Date(rec.nextDue).toLocaleDateString("es")}
-                      {rec.isShared && (
-                        <>
-                          {" · "}Compartido con {rec.shares.filter((s) => s.userId !== currentUser?.id).map((s) => s.user.name).join(", ") || "nadie"}
-                          {rec.payerId && rec.payerId !== currentUser?.id && rec.payer && (
-                            <> · Paga: {rec.payer.name}</>
-                          )}
-                        </>
-                      )}
-                    </p>
+          <div>
+            {(["MONTHLY", "YEARLY", "WEEKLY", "DAILY"] as const)
+              .filter((freq) => recurring.some((r) => r.frequency === freq))
+              .map((freq) => {
+                const items = recurring.filter((r) => r.frequency === freq);
+                return (
+                  <div key={freq}>
+                    <div className="px-4 pt-4 pb-1">
+                      <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                        {FREQ_LABELS[freq]}
+                      </span>
+                    </div>
+                    <div className="divide-y dark:divide-gray-700">
+                      {items.map((rec) => (
+                        <div key={rec.id} className={`p-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!rec.active ? "opacity-50" : ""}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: rec.category.color }} />
+                            <div>
+                              <p className="font-medium">{rec.description}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {rec.category.name}
+                                {rec.creditCard && <> · {rec.creditCard.name}</>}
+                                {" · "}Prox: {new Date(rec.nextDue).toLocaleDateString("es")}
+                                {rec.isShared && (
+                                  <>
+                                    {" · "}Compartido con {rec.shares.filter((s) => s.userId !== currentUser?.id).map((s) => s.user.name).join(", ") || "nadie"}
+                                    {rec.payerId && rec.payerId !== currentUser?.id && rec.payer && (
+                                      <> · Paga: {rec.payer.name}</>
+                                    )}
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="font-semibold">${formatCurrency(rec.amount)}</span>
+                            <button
+                              onClick={() => toggleActive(rec)}
+                              className={`text-sm hover:underline ${rec.active ? "text-amber-500 dark:text-amber-400" : "text-green-500 dark:text-green-400"}`}
+                            >
+                              {rec.active ? "Pausar" : "Activar"}
+                            </button>
+                            <button onClick={() => handleEdit(rec)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Editar</button>
+                            <button onClick={() => handleDelete(rec.id)} className="text-sm text-red-500 dark:text-red-400 hover:underline">Eliminar</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold">${formatCurrency(rec.amount)}</span>
-                  <button onClick={() => toggleActive(rec)} className={`text-sm hover:underline ${rec.active ? "text-amber-500 dark:text-amber-400" : "text-green-500 dark:text-green-400"}`}>
-                    {rec.active ? "Pausar" : "Activar"}
-                  </button>
-                  <button onClick={() => handleEdit(rec)} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">Editar</button>
-                  <button onClick={() => handleDelete(rec.id)} className="text-sm text-red-500 dark:text-red-400 hover:underline">Eliminar</button>
-                </div>
-              </div>
-            ))}
+                );
+              })}
           </div>
         )}
       </div>

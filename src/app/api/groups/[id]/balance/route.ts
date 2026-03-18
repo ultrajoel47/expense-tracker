@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Get all shared expenses for this group with their shares
   const expenses = await prisma.expense.findMany({
     where: { groupId: id, isShared: true },
-    include: { shares: true },
+    include: { shares: true, installments: { select: { dueDate: true } } },
   });
 
   // Get recurring expenses for this group with their shares
@@ -38,6 +38,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: { shares: true },
   });
 
+  const now = new Date();
+
+  // Returns elapsed months between two dates (minimum 1)
+  function monthsBetween(from: Date, to: Date): number {
+    return Math.max(1, (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth());
+  }
+
   // Build ledger: ledger[debtorId][creditorId] += amount
   const ledger: Record<string, Record<string, number>> = {};
   for (const expense of expenses) {
@@ -45,15 +52,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     for (const share of expense.shares) {
       const debtorId = share.userId;
       if (!ledger[debtorId]) ledger[debtorId] = {};
-      ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + share.amount;
+      // For installment expenses only count past/current installments (not future ones)
+      let amount = share.amount;
+      if (expense.totalInstallments && expense.totalInstallments > 1) {
+        const pastCount = expense.installments.filter((inst) => inst.dueDate <= now).length;
+        amount = pastCount > 0 ? (share.amount / expense.totalInstallments) * pastCount : 0;
+      }
+      ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + amount;
     }
   }
   for (const rec of recurringExpenses) {
     const creditorId = rec.payerId ?? rec.userId;
+    // Multiply monthly share amount by the number of months the recurring has been active
+    const months = monthsBetween(rec.createdAt, now);
     for (const share of rec.shares) {
       const debtorId = share.userId;
       if (!ledger[debtorId]) ledger[debtorId] = {};
-      ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + share.amount;
+      ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + share.amount * months;
     }
   }
 

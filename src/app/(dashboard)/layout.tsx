@@ -11,7 +11,7 @@ const primaryNavItems = [
   { href: "/dashboard/credit-cards", label: "Tarjetas" },
   { href: "/dashboard/recurring", label: "Recurrentes" },
   { href: "/dashboard/income", label: "Ingresos" },
-  { href: "/dashboard/shared", label: "Compartidos" },
+  { href: "/dashboard/home", label: "Compartidos" },
 ];
 
 const secondaryNavItems = [

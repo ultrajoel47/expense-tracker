@@ -75,6 +75,9 @@ export async function GET(req: Request) {
   const month = url.searchParams.get("month");
   const year = url.searchParams.get("year");
   const categoryId = url.searchParams.get("categoryId");
+  const description = url.searchParams.get("description");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1"));
+  const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "25")));
 
   const where: Record<string, unknown> = { userId: session.id };
   let startDate: Date | null = null;
@@ -94,18 +97,27 @@ export async function GET(req: Request) {
     where.categoryId = categoryId;
   }
 
-  const expenses = await prisma.expense.findMany({
-    where,
-    include: {
-      category: true,
-      creditCard: { select: { id: true, name: true, color: true } },
-      installments: { orderBy: { installmentNumber: "asc" } },
-      shares: { include: { user: { select: { id: true, name: true } } } },
-    },
-    orderBy: { date: "desc" },
-  });
+  if (description?.trim()) {
+    where.description = { contains: description.trim(), mode: "insensitive" };
+  }
 
-  const result = expenses.map((exp) => {
+  const [total, expenses] = await Promise.all([
+    prisma.expense.count({ where }),
+    prisma.expense.findMany({
+      where,
+      include: {
+        category: true,
+        creditCard: { select: { id: true, name: true, color: true } },
+        installments: { orderBy: { installmentNumber: "asc" } },
+        shares: { include: { user: { select: { id: true, name: true } } } },
+      },
+      orderBy: { date: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ]);
+
+  const data = expenses.map((exp) => {
     if (!startDate || !endDate || !exp.totalInstallments || exp.totalInstallments <= 1) return exp;
     const currentInstallment = exp.installments.find(
       (inst) => inst.dueDate >= startDate! && inst.dueDate < endDate!
@@ -113,7 +125,10 @@ export async function GET(req: Request) {
     return { ...exp, currentInstallment };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({
+    data,
+    meta: { total, page, totalPages: Math.ceil(total / limit), limit },
+  });
 }
 
 export async function POST(req: Request) {

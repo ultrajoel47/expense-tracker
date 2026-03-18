@@ -65,6 +65,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }),
   ]);
 
+  const totalGroupExpenses =
+    expenses.reduce((sum, e) => {
+      if (e.totalInstallments && e.totalInstallments > 1) {
+        const active = e.installments.find(
+          (inst) => inst.dueDate >= startOfMonth && inst.dueDate < startOfNextMonth
+        );
+        return sum + (active?.amount ?? e.amount);
+      }
+      return sum + e.amount;
+    }, 0) + recurring.reduce((sum, r) => sum + r.amount, 0);
+
+  const totalGroupIncome = incomes.reduce((s, i) => s + i.amount, 0);
+
   const memberStats = group.members.map((member) => {
     const income = incomes.find((i) => i.userId === member.userId)?.amount ?? null;
 
@@ -114,6 +127,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const totalCharged = expenseCharged + recurringCharged;
 
+    const idealPercentage =
+      totalGroupIncome > 0 && income !== null
+        ? (income / totalGroupIncome) * 100
+        : member.percentage;
+    const idealToPay = (totalGroupExpenses * idealPercentage) / 100;
+    const difference = totalPaid - idealToPay;
+    const remainingIncome = income !== null ? income - totalPaid : null;
+
     return {
       userId: member.userId,
       name: member.user.name,
@@ -122,8 +143,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       totalPaid,
       totalCharged,
       netBalance: totalPaid - totalCharged,
+      idealPercentage,
+      idealToPay,
+      difference,
+      remainingIncome,
     };
   });
 
-  return NextResponse.json({ group, expenses, recurring, memberStats, month, year });
+  return NextResponse.json({ group, expenses, recurring, memberStats, month, year, totalGroupExpenses });
 }
