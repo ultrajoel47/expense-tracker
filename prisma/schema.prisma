@@ -1,0 +1,216 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+model User {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  email            String             @unique
+  password         String
+  name             String
+  createdAt        DateTime           @default(now())
+  expenses         Expense[]
+  budgets          Budget[]
+  creditCards      CreditCard[]
+  monthlyIncomes   MonthlyIncome[]
+  recurringExpenses RecurringExpense[]
+  expenseShares    ExpenseShare[]
+  recurringShares  RecurringShare[]
+  ownedGroups      Group[]            @relation("OwnedGroups")
+  groupMemberships GroupMember[]
+  periodShares     PeriodShare[]
+  paidRecurringExpenses  RecurringExpense[]       @relation("RecurringExpensePayer")
+  paidRecurringPeriods   RecurringExpensePeriod[] @relation("PeriodPayer")
+}
+
+model Category {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  name             String             @unique
+  icon             String             @default("tag")
+  color            String             @default("#6366f1")
+  expenses         Expense[]
+  budgets          Budget[]
+  recurringExpenses RecurringExpense[]
+}
+
+model CreditCard {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String             @db.ObjectId
+  name             String
+  lastFour         String?
+  color            String             @default("#6366f1")
+  createdAt        DateTime           @default(now())
+  user             User               @relation(fields: [userId], references: [id])
+  expenses         Expense[]
+  recurringExpenses RecurringExpense[]
+}
+
+model MonthlyIncome {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  amount    Float
+  month     Int
+  year      Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, month, year])
+}
+
+model Expense {
+  id                String         @id @default(auto()) @map("_id") @db.ObjectId
+  amount            Float
+  description       String
+  date              DateTime       @default(now())
+  userId            String         @db.ObjectId
+  categoryId        String         @db.ObjectId
+  creditCardId      String?        @db.ObjectId
+  groupId           String?        @db.ObjectId
+  totalInstallments Int?
+  isShared          Boolean        @default(false)
+  splitMode         String         @default("auto")
+  createdAt         DateTime       @default(now())
+  user              User           @relation(fields: [userId], references: [id])
+  category          Category       @relation(fields: [categoryId], references: [id])
+  creditCard        CreditCard?    @relation(fields: [creditCardId], references: [id])
+  group             Group?         @relation(fields: [groupId], references: [id])
+  installments      Installment[]
+  shares            ExpenseShare[]
+}
+
+model Installment {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  expenseId          String    @db.ObjectId
+  installmentNumber  Int
+  dueDate            DateTime
+  amount             Float
+  paid               Boolean   @default(false)
+  paidAt             DateTime?
+  expense            Expense   @relation(fields: [expenseId], references: [id])
+
+  @@unique([expenseId, installmentNumber])
+}
+
+model ExpenseShare {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  expenseId  String   @db.ObjectId
+  userId     String   @db.ObjectId
+  percentage Float
+  amount     Float
+  expense    Expense  @relation(fields: [expenseId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+model RecurringExpense {
+  id           String                   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String                   @db.ObjectId
+  payerId      String?                  @db.ObjectId
+  categoryId   String                   @db.ObjectId
+  creditCardId String?                  @db.ObjectId
+  groupId      String?                  @db.ObjectId
+  amount       Float
+  description  String
+  frequency    Frequency
+  dayOfMonth   Int?
+  nextDue      DateTime
+  active       Boolean                  @default(true)
+  isShared     Boolean                  @default(false)
+  splitMode    String                   @default("auto")
+  createdAt    DateTime                 @default(now())
+  user         User                     @relation(fields: [userId], references: [id])
+  payer        User?                    @relation("RecurringExpensePayer", fields: [payerId], references: [id])
+  category     Category                 @relation(fields: [categoryId], references: [id])
+  creditCard   CreditCard?              @relation(fields: [creditCardId], references: [id])
+  group        Group?                   @relation(fields: [groupId], references: [id])
+  shares       RecurringShare[]
+  periods      RecurringExpensePeriod[]
+}
+
+model RecurringShare {
+  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
+  recurringExpenseId String           @db.ObjectId
+  userId             String           @db.ObjectId
+  percentage         Float
+  amount             Float
+  recurringExpense   RecurringExpense @relation(fields: [recurringExpenseId], references: [id])
+  user               User             @relation(fields: [userId], references: [id])
+
+  @@unique([recurringExpenseId, userId])
+}
+
+model Budget {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  amount     Float
+  month      Int
+  year       Int
+  userId     String   @db.ObjectId
+  categoryId String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, categoryId, month, year])
+}
+
+model Group {
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  ownerId   String        @db.ObjectId
+  createdAt DateTime      @default(now())
+  owner     User          @relation("OwnedGroups", fields: [ownerId], references: [id])
+  members   GroupMember[]
+  expenses  Expense[]
+  recurring RecurringExpense[]
+}
+
+model GroupMember {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  groupId    String   @db.ObjectId
+  userId     String   @db.ObjectId
+  percentage Float
+  createdAt  DateTime @default(now())
+  group      Group    @relation(fields: [groupId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}
+
+model RecurringExpensePeriod {
+  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
+  recurringExpenseId String           @db.ObjectId
+  payerId            String?          @db.ObjectId
+  periodStart        DateTime
+  amount             Float
+  description        String
+  categoryId         String           @db.ObjectId
+  splitMode          String
+  createdAt          DateTime         @default(now())
+  recurringExpense   RecurringExpense @relation(fields: [recurringExpenseId], references: [id])
+  payer              User?            @relation("PeriodPayer", fields: [payerId], references: [id])
+  shares             PeriodShare[]
+}
+
+model PeriodShare {
+  id         String                 @id @default(auto()) @map("_id") @db.ObjectId
+  periodId   String                 @db.ObjectId
+  userId     String                 @db.ObjectId
+  percentage Float
+  amount     Float
+  period     RecurringExpensePeriod @relation(fields: [periodId], references: [id])
+  user       User                   @relation(fields: [userId], references: [id])
+
+  @@unique([periodId, userId])
+}

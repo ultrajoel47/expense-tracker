@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(find:*)",
+      "Bash(find /d/Proyectos/expense-tracker-ocr-master/src -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx \\\\\\))",
+      "Bash(xargs grep:*)",
+      "Bash(ls -la /d/Proyectos/expense-tracker-ocr-master/src/app/api/recurring-expenses/[id]/)",
+      "Bash(grep -r \"Expense.create\\\\|prisma.expense.create\" /d/Proyectos/expense-tracker-ocr-master/src --include=*.ts -A 5)",
+      "Bash(find d:/Proyectos/expense-tracker-ocr-master/src -type f \\\\\\(-name *Expense* -o -name *expense* \\\\\\))",
+      "Bash(npx prisma:*)",
+      "Bash(set -a)",
+      "Bash(. ./.env)",
+      "Bash(set +a)",
+      "Bash(ls -la \"d:\\\\Proyectos\\\\expense-tracker-ocr-master/src/app/\\(dashboard\\)/dashboard/\")",
+      "Bash(ls -la \"d:\\\\Proyectos\\\\expense-tracker-ocr-master/src/app/\\(dashboard\\)/dashboard/expenses/\")",
+      "Bash(find d:Proyectosexpense-tracker-ocr-mastersrc -type f \\\\\\(-name *nav* -o -name *sidebar* -o -name *header* \\\\\\))",
+      "Bash(ls -la \"d:\\\\Proyectos\\\\expense-tracker-ocr-master\\\\src\\\\app\\\\\\(dashboard\\)\")",
+      "Bash(ls -la \"d:\\\\Proyectos\\\\expense-tracker-ocr-master\\\\src\\\\app\\\\\\(dashboard\\)\\\\dashboard\")",
+      "Bash(cd /d)",
+      "Bash(python3:*)",
+      "Bash(/c/laragon/bin/python/python-3.10/python:*)",
+      "Bash(npm list:*)",
+      "Bash(python -c \"import openpyxl; print\\(''ok''\\)\")",
+      "Bash(pip install:*)",
+      "Bash(py -m pip install openpyxl pandas -q)",
+      "Bash(py -c \":*)",
+      "Bash(grep -r \"toFixed\\\\|toLocaleString\" d:Proyectosexpense-tracker-ocr-master/src --include=*.tsx --include=*.ts -n)"
+    ]
+  }
+}

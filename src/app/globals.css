@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: var(--font-geist);
+}
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+:root {
+  --tooltip-bg: #fff;
+  --tooltip-border: #e5e7eb;
+}
+
+.dark {
+  --tooltip-bg: #1f2937;
+  --tooltip-border: #374151;
+  color-scheme: dark;
+}
