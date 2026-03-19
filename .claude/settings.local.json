@@ -42,7 +42,10 @@
       "Bash(cat \"/d/Proyectos/expense-tracker/src/app/\\(dashboard\\)/dashboard/shared/page.tsx\")",
       "Bash(wc -l \"/d/Proyectos/expense-tracker/src/app/\\(dashboard\\)/dashboard/home/page.tsx\")",
       "Bash(tail -n +200 \"/d/Proyectos/expense-tracker/src/app/\\(dashboard\\)/dashboard/home/page.tsx\")",
-      "Bash(cat \"d:/Proyectos/expense-tracker/src/app/\\(dashboard\\)/dashboard/home/page.tsx\")"
+      "Bash(cat \"d:/Proyectos/expense-tracker/src/app/\\(dashboard\\)/dashboard/home/page.tsx\")",
+      "Bash(xargs ls:*)",
+      "Bash(wc -l /d/Proyectos/expense-tracker-ocr-master/src/app/\\\\\\(dashboard\\\\\\)/dashboard/home/page.tsx)",
+      "Bash(ls -la /d/Proyectos/expense-tracker-ocr-master/*.config.*)"
     ]
   }
 }

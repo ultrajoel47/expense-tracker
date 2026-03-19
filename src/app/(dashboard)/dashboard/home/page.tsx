@@ -380,7 +380,7 @@ export default function HomePage() {
             >
               ←
             </button>
-            <span className="text-lg font-bold px-6 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg min-w-[190px] text-center text-gray-800 dark:text-gray-100 select-none">
+            <span className="text-base sm:text-lg font-bold px-4 sm:px-6 py-1.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg min-w-[140px] sm:min-w-[190px] text-center text-gray-800 dark:text-gray-100 select-none">
               {MONTH_NAMES[month - 1]} {year}
             </span>
             <button
@@ -502,7 +502,7 @@ export default function HomePage() {
                 {balance.map((entry, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-lg px-3 py-2"
+                    className="flex items-center flex-wrap gap-2 text-sm bg-gray-50 dark:bg-gray-700/50 border dark:border-gray-600 rounded-lg px-3 py-2 min-w-0"
                   >
                     <span className="font-semibold text-red-600 dark:text-red-400">{entry.debtorName}</span>
                     <span className="text-gray-400 dark:text-gray-500 text-xs">le debe a</span>

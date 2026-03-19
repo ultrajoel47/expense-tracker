@@ -449,25 +449,27 @@ export default function RecurringPage() {
                 )}
                 <div className="space-y-2">
                   {form.manualShares.map((s) => (
-                    <div key={s.userId} className="flex items-center gap-3">
-                      <span className="text-sm w-32 truncate text-gray-700 dark:text-gray-300">
+                    <div key={s.userId} className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm flex-1 min-w-0 truncate text-gray-700 dark:text-gray-300">
                         {s.name}
                         {s.userId === currentUser?.id && (
                           <span className="ml-1 text-xs text-indigo-500">(vos)</span>
                         )}
                       </span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={s.percentage}
-                        onChange={(e) => updateManualPct(s.userId, Number(e.target.value))}
-                        className="w-24 px-3 py-1.5 border dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100"
-                      />
-                      <span className="text-sm text-gray-500">%</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={s.percentage}
+                          onChange={(e) => updateManualPct(s.userId, Number(e.target.value))}
+                          className="w-16 sm:w-20 px-2.5 py-1.5 border dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100 text-right"
+                        />
+                        <span className="text-sm text-gray-500">%</span>
+                      </div>
                       {form.amount && (
-                        <span className="text-sm text-gray-400">
+                        <span className="text-sm text-gray-400 shrink-0 hidden sm:inline">
                           = ${formatCurrency((Number(form.amount) * Number(s.percentage)) / 100)}
                         </span>
                       )}

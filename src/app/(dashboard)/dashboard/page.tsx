@@ -242,35 +242,37 @@ export default function DashboardPage() {
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
           <h2 className="font-semibold mb-4">Distribucion por Categoria</h2>
           {stats.byCategory.length > 0 ? (
-            <div className="flex items-center gap-4">
-              <ResponsiveContainer width="50%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={stats.byCategory}
-                    dataKey="total"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={85}
-                    innerRadius={45}
-                    strokeWidth={2}
-                  >
-                    {stats.byCategory.map((c) => (
-                      <Cell key={c.name} fill={c.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v) => [`$${formatCurrency(Number(v))}`]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-2 text-sm flex-1">
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="w-full sm:w-1/2 shrink-0">
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={stats.byCategory}
+                      dataKey="total"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      innerRadius={42}
+                      strokeWidth={2}
+                    >
+                      {stats.byCategory.map((c) => (
+                        <Cell key={c.name} fill={c.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => [`$${formatCurrency(Number(v))}`]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full sm:w-1/2 space-y-2 text-sm">
                 {stats.byCategory.map((c) => {
                   const pct = stats.total > 0 ? Math.round((c.total / stats.total) * 100) : 0;
                   return (
                     <div key={c.name} className="flex items-center gap-2">
                       <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
-                      <span className="flex-1">{c.name}</span>
-                      <span className="text-gray-500 dark:text-gray-400 tabular-nums">${formatCurrency(c.total)}</span>
-                      <span className="text-gray-400 dark:text-gray-500 text-xs w-8 text-right">{pct}%</span>
+                      <span className="flex-1 truncate">{c.name}</span>
+                      <span className="text-gray-500 dark:text-gray-400 tabular-nums shrink-0">${formatCurrency(c.total)}</span>
+                      <span className="text-gray-400 dark:text-gray-500 text-xs w-8 text-right shrink-0">{pct}%</span>
                     </div>
                   );
                 })}
