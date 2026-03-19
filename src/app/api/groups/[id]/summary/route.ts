@@ -47,7 +47,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       orderBy: { date: "desc" },
     }),
     prisma.recurringExpense.findMany({
-      where: { groupId: id, isShared: true },
+      where: { groupId: id, isShared: true, nextDue: { gte: startOfMonth, lt: startOfNextMonth } },
       include: {
         category: { select: { id: true, name: true, color: true } },
         shares: { include: { user: { select: { id: true, name: true } } } },

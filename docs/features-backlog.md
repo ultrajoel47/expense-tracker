@@ -18,6 +18,7 @@ Funcionalidades identificadas en el spreadsheet original que no están implement
 | 8 | [UI unificada: Compartidos + Grupos](#8-ui-unificada-compartidos--grupos) | ⬜ Pendiente | **Requiere planificación previa antes de ejecutar** |
 | 9 | [Invariante: gasto compartido requiere grupo](#9-invariante-gasto-compartido-requiere-grupo) | ⬜ Pendiente | Validación en API + UI + recurring |
 | 10 | [Configuración automática de % por ingresos en grupos](#10-configuración-automática-de--por-ingresos-en-grupos) | ✅ Completo | Botón "Sync %" en grupos + endpoint POST sync-percentages |
+| 11 | [Cards métricas: balance neto unificado](#11-cards-métricas-balance-neto-unificado) | ✅ Completo | Bug fix recurrentes + card diferencia alineada con resumen |
 
 ---
 
@@ -181,6 +182,22 @@ Ejemplo: "BBVA Pablo" → propietario: Pablo, responsable: Virginia.
 - `src/app/api/expenses/route.ts` — usar ingresos para calcular shares si `splitMode === "auto"`
 - `src/app/api/recurring-expenses/route.ts` — ídem
 - `src/app/(dashboard)/dashboard/groups/page.tsx` — UI para seleccionar modo
+
+---
+
+### 11. Cards métricas: balance neto unificado
+
+**Problema:** La página `/dashboard/home` mostraba 3 cards separadas: "Total compartido", "Mi parte a pagar" y "Lo que otros deben". Esto no coincidía con el Excel, donde se mostraba un solo balance neto. Además, los números no coincidían con la tabla de resumen por dos razones:
+
+1. **Bug en summary API:** los gastos recurrentes no se filtraban por mes — se sumaban todos los recurrentes del grupo (históricos y futuros), inflando el total.
+2. **Fórmulas distintas:** las cards usaban `ExpenseShare.amount` (deuda directa) mientras la tabla usaba la diferencia basada en % de ingreso (`totalPaid - idealToPay`).
+
+**Solución:**
+
+1. **Fix en `src/app/api/groups/[id]/summary/route.ts`:** filtrar recurrentes por `nextDue` dentro del mes seleccionado, igualando el comportamiento de `/api/shared`.
+2. **UI en `src/app/(dashboard)/dashboard/home/page.tsx`:** reemplazar las 2 cards (roja/verde) por una sola card "Diferencia del mes" que usa la `difference` del `memberStats` del usuario actual — misma fuente que la tabla de resumen. "Total compartido" ahora usa `totalGroupExpenses` del summary API.
+
+**Resultado:** 2 cards (Total compartido + Diferencia del mes) con números que coinciden exactamente con la tabla de resumen.
 
 ---
 

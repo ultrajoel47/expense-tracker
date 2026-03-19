@@ -158,8 +158,8 @@ export default function HomePage() {
 
   // UI
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("netBalance");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [activeTab, setActiveTab] = useState<ActiveTab>("resumen");
 
   // AbortController refs
@@ -452,27 +452,29 @@ export default function HomePage() {
 
       {/* ── Tarjetas métricas ──────────────────────────────────────────────── */}
       {(sharedLoading && !summary) ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[...Array(2)].map((_, i) => <Skeleton key={i} className="h-24" />)}
         </div>
       ) : summary ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-4">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total compartido</p>
-            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${formatCurrency(summary.totalShared)}</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{MONTH_NAMES[month - 1]} {year}</p>
-          </div>
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl p-4">
-            <p className="text-xs font-medium text-red-600 dark:text-red-400 uppercase tracking-wide">Mi parte a pagar</p>
-            <p className="text-2xl font-bold text-red-700 dark:text-red-300 mt-1">${formatCurrency(summary.myShare)}</p>
-            <p className="text-xs text-red-400 dark:text-red-500 mt-0.5">Lo que debo a otros</p>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800 rounded-xl p-4">
-            <p className="text-xs font-medium text-green-600 dark:text-green-400 uppercase tracking-wide">Lo que otros deben</p>
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300 mt-1">${formatCurrency(summary.othersShare)}</p>
-            <p className="text-xs text-green-400 dark:text-green-500 mt-0.5">Parte de gastos que pagué</p>
-          </div>
-        </div>
+        (() => {
+          const myStats = memberStats.find((m) => m.userId === currentUserId);
+          const difference = myStats?.difference ?? 0;
+          const isPositive = difference >= 0;
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border dark:border-gray-700 p-4">
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total compartido</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">${formatCurrency(totalGroupExpenses)}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{MONTH_NAMES[month - 1]} {year}</p>
+              </div>
+              <div className={`${isPositive ? 'bg-green-50 dark:bg-green-900/20 border-green-100 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800'} border rounded-xl p-4`}>
+                <p className={`text-xs font-medium ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} uppercase tracking-wide`}>Diferencia del mes</p>
+                <p className={`text-2xl font-bold ${isPositive ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'} mt-1`}>${formatCurrency(Math.abs(difference))}</p>
+                <p className={`text-xs ${isPositive ? 'text-green-400 dark:text-green-500' : 'text-red-400 dark:text-red-500'} mt-0.5`}>{isPositive ? 'Pagaste de más' : 'Debés en neto'}</p>
+              </div>
+            </div>
+          );
+        })()
       ) : null}
 
       {/* ── Balance de deudas (acumulado histórico) ────────────────────────── */}
