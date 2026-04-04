@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createPeriodFromRecurringIfMissing } from "@/lib/recurring-periods";
 
 type ManualShare = { userId: string; percentage: number };
 
@@ -77,7 +78,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const body = await req.json();
   const { isShared, splitMode = "auto", sharedUserIds, sharedUsers } = body;
 
-  // Detect significant changes to create a period snapshot
+  // Detect significant changes so the current month's period is frozen before editing the template
   const hasSignificantChange =
     (body.amount !== undefined && Number(body.amount) !== rec.amount) ||
     (body.description !== undefined && body.description !== rec.description) ||
@@ -87,44 +88,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     (body.payerId !== undefined && (body.payerId || null) !== (rec.payerId || null));
 
   if (hasSignificantChange) {
-    // Find the last period to determine periodStart
-    const lastPeriod = await prisma.recurringExpensePeriod.findFirst({
-      where: { recurringExpenseId: id },
-      orderBy: { periodStart: "desc" },
-    });
-
-    const periodStart = lastPeriod
-      ? (() => {
-          const d = new Date(lastPeriod.periodStart);
-          d.setMonth(d.getMonth() + 1);
-          return d;
-        })()
-      : rec.createdAt;
-
-    // Create period snapshot of current configuration
-    const period = await prisma.recurringExpensePeriod.create({
-      data: {
-        recurringExpenseId: id,
-        periodStart,
-        amount: rec.amount,
-        description: rec.description,
-        categoryId: rec.categoryId,
-        splitMode: rec.splitMode,
-        payerId: rec.payerId ?? null,
-      },
-    });
-
-    // Copy current shares to period
-    if (rec.shares.length > 0) {
-      await prisma.periodShare.createMany({
-        data: rec.shares.map((s: any) => ({
-          periodId: period.id,
-          userId: s.userId,
-          percentage: s.percentage,
-          amount: s.amount,
-        })),
-      });
-    }
+    const now = new Date();
+    await createPeriodFromRecurringIfMissing(prisma as any, rec as any, now.getFullYear(), now.getMonth() + 1);
   }
 
   const updated = await prisma.recurringExpense.update({

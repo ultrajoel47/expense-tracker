@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureRecurringPeriodsForMonth, getNextPeriodMonthStart } from "@/lib/recurring-periods";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -18,41 +19,35 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
   if (!group) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 });
 
-  // Build name lookup from group members
   const userNames = new Map<string, string>(group.members.map((m: any) => [m.userId, m.user.name]));
-  // Also include owner name
   if (!userNames.has(group.ownerId)) {
     const owner = await prisma.user.findUnique({ where: { id: group.ownerId }, select: { name: true } });
     if (owner) userNames.set(group.ownerId, owner.name);
   }
 
-  // Get all shared expenses for this group with their shares
-  const expenses = await prisma.expense.findMany({
-    where: { groupId: id, isShared: true },
-    include: { shares: true, installments: { select: { dueDate: true } } },
-  });
-
-  // Get recurring expenses for this group with their shares
-  const recurringExpenses = await prisma.recurringExpense.findMany({
-    where: { groupId: id, isShared: true },
-    include: { shares: true },
-  });
-
   const now = new Date();
+  await ensureRecurringPeriodsForMonth(prisma as any, { year: now.getFullYear(), month: now.getMonth() + 1, groupId: id });
 
-  // Returns elapsed months between two dates (minimum 1)
-  function monthsBetween(from: Date, to: Date): number {
-    return Math.max(1, (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth());
-  }
+  const [expenses, recurringPeriods] = await Promise.all([
+    prisma.expense.findMany({
+      where: { groupId: id, isShared: true },
+      include: { shares: true, installments: { select: { dueDate: true } } },
+    }),
+    prisma.recurringExpensePeriod.findMany({
+      where: {
+        recurringExpense: { groupId: id, isShared: true },
+        periodStart: { lt: getNextPeriodMonthStart(now.getFullYear(), now.getMonth() + 1) },
+      },
+      include: { shares: true, recurringExpense: { select: { userId: true } } },
+    }),
+  ]);
 
-  // Build ledger: ledger[debtorId][creditorId] += amount
   const ledger: Record<string, Record<string, number>> = {};
   for (const expense of expenses) {
-    const creditorId = expense.userId; // payer = creditor
+    const creditorId = expense.userId;
     for (const share of expense.shares) {
       const debtorId = share.userId;
       if (!ledger[debtorId]) ledger[debtorId] = {};
-      // For installment expenses only count past/current installments (not future ones)
       let amount = share.amount;
       if (expense.totalInstallments && expense.totalInstallments > 1) {
         const pastCount = expense.installments.filter((inst: any) => inst.dueDate <= now).length;
@@ -61,25 +56,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + amount;
     }
   }
-  for (const rec of recurringExpenses) {
-    const creditorId = rec.payerId ?? rec.userId;
-    // Multiply monthly share amount by the number of months the recurring has been active
-    const months = monthsBetween(rec.createdAt, now);
-    for (const share of rec.shares) {
+
+  for (const period of recurringPeriods) {
+    const creditorId = period.payerId ?? period.recurringExpense.userId;
+    for (const share of period.shares) {
       const debtorId = share.userId;
       if (!ledger[debtorId]) ledger[debtorId] = {};
-      ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + share.amount * months;
+      ledger[debtorId][creditorId] = (ledger[debtorId][creditorId] ?? 0) + share.amount;
     }
   }
 
-  // Simplify net debts — process each pair once
-  const result: {
-    debtorId: string;
-    debtorName: string;
-    creditorId: string;
-    creditorName: string;
-    amount: number;
-  }[] = [];
+  const result: { debtorId: string; debtorName: string; creditorId: string; creditorName: string; amount: number }[] = [];
   const processedPairs = new Set<string>();
 
   for (const [debtorId, creditors] of Object.entries(ledger)) {
@@ -92,21 +79,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       const netAmount = amount - reverseAmount;
 
       if (netAmount > 0.01) {
-        result.push({
-          debtorId,
-          debtorName: userNames.get(debtorId) ?? debtorId,
-          creditorId,
-          creditorName: userNames.get(creditorId) ?? creditorId,
-          amount: netAmount,
-        });
+        result.push({ debtorId, debtorName: userNames.get(debtorId) ?? debtorId, creditorId, creditorName: userNames.get(creditorId) ?? creditorId, amount: netAmount });
       } else if (netAmount < -0.01) {
-        result.push({
-          debtorId: creditorId,
-          debtorName: userNames.get(creditorId) ?? creditorId,
-          creditorId: debtorId,
-          creditorName: userNames.get(debtorId) ?? debtorId,
-          amount: -netAmount,
-        });
+        result.push({ debtorId: creditorId, debtorName: userNames.get(creditorId) ?? creditorId, creditorId: debtorId, creditorName: userNames.get(debtorId) ?? debtorId, amount: -netAmount });
       }
     }
   }

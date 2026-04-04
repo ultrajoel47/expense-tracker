@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureRecurringPeriodsForMonth } from "@/lib/recurring-periods";
 
 interface ShareDetail {
   id: string;
@@ -46,23 +47,19 @@ export async function GET(request: Request) {
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1"));
   const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") ?? "15")));
 
-  // Date range for the selected month (or single day)
-  const startDate = day
-    ? new Date(Date.UTC(year, month - 1, day))
-    : new Date(Date.UTC(year, month - 1, 1));
-  const endDate = day
-    ? new Date(Date.UTC(year, month - 1, day + 1))
-    : new Date(Date.UTC(year, month, 1));
+  const startDate = day ? new Date(Date.UTC(year, month - 1, day)) : new Date(Date.UTC(year, month - 1, 1));
+  const endDate = day ? new Date(Date.UTC(year, month - 1, day + 1)) : new Date(Date.UTC(year, month, 1));
+
+  if (groupId) {
+    await ensureRecurringPeriodsForMonth(prisma as any, { year, month, groupId });
+  }
 
   const groupFilter = groupId ? { groupId } : {};
   const categoryFilter = categoryId ? { categoryId } : {};
-
   const combined: CombinedEntry[] = [];
 
-  // ─── One-time expenses ───────────────────────────────────────────────────
   if (type !== "recurring") {
     const [debtorShares, payerExpenses] = await Promise.all([
-      // A: I have a share in someone else's expense (I owe them)
       prisma.expenseShare.findMany({
         where: {
           userId: session.id,
@@ -87,7 +84,6 @@ export async function GET(request: Request) {
           },
         },
       }),
-      // B: I paid a shared expense (others owe me)
       prisma.expense.findMany({
         where: {
           userId: session.id,
@@ -112,9 +108,7 @@ export async function GET(request: Request) {
     for (const s of debtorShares) {
       const exp = s.expense;
       const isInstallment = exp.totalInstallments && exp.totalInstallments > 1;
-      const activeInstallment = isInstallment
-        ? exp.installments.find((inst: any) => inst.dueDate >= startDate && inst.dueDate < endDate)
-        : null;
+      const activeInstallment = isInstallment ? exp.installments.find((inst: any) => inst.dueDate >= startDate && inst.dueDate < endDate) : null;
       const monthlyAmount = activeInstallment?.amount ?? exp.amount;
       const myAmount = isInstallment ? (monthlyAmount * s.percentage) / 100 : s.amount;
       combined.push({
@@ -129,13 +123,7 @@ export async function GET(request: Request) {
         category: exp.category,
         payerName: exp.user.name,
         payerId: exp.userId,
-        shares: exp.shares.map((sh: any) => ({
-          id: sh.id,
-          userId: sh.userId,
-          percentage: sh.percentage,
-          amount: isInstallment ? (monthlyAmount * sh.percentage) / 100 : sh.amount,
-          user: sh.user,
-        })),
+        shares: exp.shares.map((sh: any) => ({ id: sh.id, userId: sh.userId, percentage: sh.percentage, amount: isInstallment ? (monthlyAmount * sh.percentage) / 100 : sh.amount, user: sh.user })),
         groupId: exp.groupId ?? null,
         installmentNumber: activeInstallment?.installmentNumber,
         totalInstallments: exp.totalInstallments,
@@ -144,13 +132,9 @@ export async function GET(request: Request) {
 
     for (const exp of payerExpenses) {
       const isInstallment = exp.totalInstallments && exp.totalInstallments > 1;
-      const activeInstallment = isInstallment
-        ? exp.installments.find((inst: any) => inst.dueDate >= startDate && inst.dueDate < endDate)
-        : null;
+      const activeInstallment = isInstallment ? exp.installments.find((inst: any) => inst.dueDate >= startDate && inst.dueDate < endDate) : null;
       const monthlyAmount = activeInstallment?.amount ?? exp.amount;
-      const othersAmount = isInstallment
-        ? exp.shares.reduce((s: number, sh: any) => s + (monthlyAmount * sh.percentage) / 100, 0)
-        : exp.shares.reduce((s: number, sh: any) => s + sh.amount, 0);
+      const othersAmount = isInstallment ? exp.shares.reduce((s: number, sh: any) => s + (monthlyAmount * sh.percentage) / 100, 0) : exp.shares.reduce((s: number, sh: any) => s + sh.amount, 0);
       combined.push({
         id: `ep-${exp.id}`,
         type: "expense",
@@ -163,13 +147,7 @@ export async function GET(request: Request) {
         category: exp.category,
         payerName: exp.user.name,
         payerId: exp.userId,
-        shares: exp.shares.map((sh: any) => ({
-          id: sh.id,
-          userId: sh.userId,
-          percentage: sh.percentage,
-          amount: isInstallment ? (monthlyAmount * sh.percentage) / 100 : sh.amount,
-          user: sh.user,
-        })),
+        shares: exp.shares.map((sh: any) => ({ id: sh.id, userId: sh.userId, percentage: sh.percentage, amount: isInstallment ? (monthlyAmount * sh.percentage) / 100 : sh.amount, user: sh.user })),
         groupId: exp.groupId ?? null,
         installmentNumber: activeInstallment?.installmentNumber,
         totalInstallments: exp.totalInstallments,
@@ -177,134 +155,131 @@ export async function GET(request: Request) {
     }
   }
 
-  // ─── Recurring expenses ──────────────────────────────────────────────────
   if (type !== "expense") {
     const [debtorShares, payerRecurring] = await Promise.all([
-      // C: I have a share in someone's recurring (I owe them)
-      prisma.recurringShare.findMany({
+      prisma.periodShare.findMany({
         where: {
           userId: session.id,
-          recurringExpense: {
-            ...groupFilter,
+          period: {
             ...categoryFilter,
-            nextDue: { gte: startDate, lt: endDate },
+            ...(groupId ? { recurringExpense: { groupId } } : {}),
+            periodStart: { gte: startDate, lt: endDate },
           },
         },
         include: {
-          recurringExpense: {
+          user: { select: { id: true, name: true } },
+          period: {
             include: {
-              category: { select: { id: true, name: true, color: true } },
               shares: { include: { user: { select: { id: true, name: true } } } },
-              user: { select: { id: true, name: true } },
               payer: { select: { id: true, name: true } },
+              recurringExpense: {
+                select: {
+                  groupId: true,
+                  frequency: true,
+                  userId: true,
+                  user: { select: { id: true, name: true } },
+                  payer: { select: { id: true, name: true } },
+                  category: { select: { id: true, name: true, color: true } },
+                },
+              },
             },
           },
         },
       }),
-      // D: I am the effective payer of a shared recurring (others owe me)
-      prisma.recurringExpense.findMany({
+      prisma.recurringExpensePeriod.findMany({
         where: {
           OR: [
             { payerId: session.id },
-            { userId: session.id, payerId: null },
+            { payerId: null, recurringExpense: { userId: session.id } },
           ],
-          isShared: true,
-          ...groupFilter,
+          periodStart: { gte: startDate, lt: endDate },
           ...categoryFilter,
-          nextDue: { gte: startDate, lt: endDate },
+          ...(groupId ? { recurringExpense: { groupId } } : {}),
         },
         include: {
-          category: { select: { id: true, name: true, color: true } },
           shares: { include: { user: { select: { id: true, name: true } } } },
-          user: { select: { id: true, name: true } },
           payer: { select: { id: true, name: true } },
+          recurringExpense: {
+            select: {
+              groupId: true,
+              frequency: true,
+              userId: true,
+              user: { select: { id: true, name: true } },
+              payer: { select: { id: true, name: true } },
+              category: { select: { id: true, name: true, color: true } },
+            },
+          },
         },
       }),
     ]);
 
+    const categoryIds = [...new Set([...debtorShares.map((s: any) => s.period.categoryId), ...payerRecurring.map((rec: any) => rec.categoryId)])];
+    const categories = categoryIds.length ? await prisma.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true, name: true, color: true } }) : [];
+    const categoryMap = new Map(categories.map((category: any) => [category.id, category]));
     const seen = new Set<string>();
 
     for (const s of debtorShares) {
-      const rec = s.recurringExpense;
+      const rec = s.period;
       seen.add(rec.id);
-      const effectivePayerName = rec.payer?.name ?? rec.user.name;
-      const effectivePayerId = rec.payerId ?? rec.userId;
+      const effectivePayerName = rec.payer?.name ?? rec.recurringExpense.payer?.name ?? rec.recurringExpense.user.name;
+      const effectivePayerId = rec.payerId ?? rec.recurringExpense.payer?.id ?? rec.recurringExpense.userId;
       combined.push({
         id: `rs-${s.id}`,
         type: "recurring",
         role: "debtor",
-        date: rec.nextDue.toISOString(),
+        date: rec.periodStart.toISOString(),
         description: rec.description,
         totalAmount: rec.amount,
         myAmount: s.amount,
         myPercentage: s.percentage,
-        category: rec.category,
+        category: categoryMap.get(rec.categoryId) ?? rec.recurringExpense.category,
         payerName: effectivePayerName,
         payerId: effectivePayerId,
-        shares: rec.shares.map((sh: any) => ({
-          id: sh.id,
-          userId: sh.userId,
-          percentage: sh.percentage,
-          amount: sh.amount,
-          user: sh.user,
-        })),
-        groupId: rec.groupId ?? null,
-        frequency: rec.frequency,
-        nextDue: rec.nextDue.toISOString(),
+        shares: rec.shares.map((sh: any) => ({ id: sh.id, userId: sh.userId, percentage: sh.percentage, amount: sh.amount, user: sh.user })),
+        groupId: rec.recurringExpense.groupId ?? null,
+        frequency: rec.recurringExpense.frequency,
+        nextDue: rec.periodStart.toISOString(),
       });
     }
 
     for (const rec of payerRecurring) {
       if (seen.has(rec.id)) continue;
       seen.add(rec.id);
-      const effectivePayerName = rec.payer?.name ?? rec.user.name;
-      const effectivePayerId = rec.payerId ?? rec.userId;
+      const effectivePayerName = rec.payer?.name ?? rec.recurringExpense.payer?.name ?? rec.recurringExpense.user.name;
+      const effectivePayerId = rec.payerId ?? rec.recurringExpense.payer?.id ?? rec.recurringExpense.userId;
       const othersAmount = rec.shares.reduce((s: number, sh: any) => s + sh.amount, 0);
       combined.push({
         id: `rp-${rec.id}`,
         type: "recurring",
         role: "payer",
-        date: rec.nextDue.toISOString(),
+        date: rec.periodStart.toISOString(),
         description: rec.description,
         totalAmount: rec.amount,
         myAmount: othersAmount,
         myPercentage: null,
-        category: rec.category,
+        category: categoryMap.get(rec.categoryId) ?? rec.recurringExpense.category,
         payerName: effectivePayerName,
         payerId: effectivePayerId,
-        shares: rec.shares.map((sh: any) => ({
-          id: sh.id,
-          userId: sh.userId,
-          percentage: sh.percentage,
-          amount: sh.amount,
-          user: sh.user,
-        })),
-        groupId: rec.groupId ?? null,
-        frequency: rec.frequency,
-        nextDue: rec.nextDue.toISOString(),
+        shares: rec.shares.map((sh: any) => ({ id: sh.id, userId: sh.userId, percentage: sh.percentage, amount: sh.amount, user: sh.user })),
+        groupId: rec.recurringExpense.groupId ?? null,
+        frequency: rec.recurringExpense.frequency,
+        nextDue: rec.periodStart.toISOString(),
       });
     }
   }
 
-  // Sort by date descending
   combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Monthly summary from full (pre-paginated) list
   const summary = {
     totalShared: combined.reduce((s, e) => s + e.totalAmount, 0),
     myShare: combined.filter((e) => e.role === "debtor").reduce((s, e) => s + e.myAmount, 0),
     othersShare: combined.filter((e) => e.role === "payer").reduce((s, e) => s + e.myAmount, 0),
   };
 
-  // Pagination
   const total = combined.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const items = combined.slice((safePage - 1) * limit, safePage * limit);
 
-  return NextResponse.json({
-    items,
-    pagination: { total, page: safePage, totalPages, limit },
-    summary,
-  });
+  return NextResponse.json({ items, pagination: { total, page: safePage, totalPages, limit }, summary });
 }

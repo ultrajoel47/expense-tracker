@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createPeriodFromRecurringIfMissing, getNextPeriodMonthStart } from "@/lib/recurring-periods";
 
 type ManualShare = { userId: string; percentage: number };
 
@@ -167,6 +168,21 @@ export async function POST(req: Request) {
         }
       }
     }
+  }
+
+  const createdRecurring = await prisma.recurringExpense.findUnique({
+    where: { id: recurring.id },
+    include: { shares: true },
+  });
+
+  if (
+    createdRecurring &&
+    createdRecurring.active &&
+    createdRecurring.frequency === "MONTHLY" &&
+    createdRecurring.nextDue < getNextPeriodMonthStart(new Date().getFullYear(), new Date().getMonth() + 1)
+  ) {
+    const now = new Date();
+    await createPeriodFromRecurringIfMissing(prisma as any, createdRecurring as any, now.getFullYear(), now.getMonth() + 1);
   }
 
   return NextResponse.json(recurring, { status: 201 });
