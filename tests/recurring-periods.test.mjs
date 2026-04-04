@@ -60,9 +60,9 @@ function createPrismaMock() {
 
 async function run() {
   const start = getPeriodMonthStart(2026, 4);
-  assert.equal(start.getFullYear(), 2026);
-  assert.equal(start.getMonth(), 3);
-  assert.equal(start.getDate(), 1);
+  assert.equal(start.getUTCFullYear(), 2026);
+  assert.equal(start.getUTCMonth(), 3);
+  assert.equal(start.getUTCDate(), 1);
 
   const mock = createPrismaMock();
   const createdFirst = await ensureRecurringPeriodsForMonth(mock.prisma, { year: 2026, month: 4, groupId: "group-1" });
@@ -70,7 +70,7 @@ async function run() {
   assert.equal(createdFirst.length, 1);
   assert.equal(mock.createdPeriods.length, 1);
   assert.equal(mock.createdShares.length, 1);
-  assert.equal(mock.createdPeriods[0].periodStart.toISOString(), new Date(2026, 3, 1).toISOString());
+  assert.equal(mock.createdPeriods[0].periodStart.toISOString(), new Date(Date.UTC(2026, 3, 1)).toISOString());
   assert.equal(mock.createdShares[0].amount, 400);
 
   const createdSecond = await ensureRecurringPeriodsForMonth(mock.prisma, { year: 2026, month: 4, groupId: "group-1" });

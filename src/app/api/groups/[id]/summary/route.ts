@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ensureRecurringPeriodsForMonth } from "@/lib/recurring-periods";
+import { ensureRecurringPeriodsForMonth, getNextPeriodMonthStart, getPeriodMonthStart } from "@/lib/recurring-periods";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -25,8 +25,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   });
   if (!group) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 });
 
-  const startOfMonth = new Date(year, month - 1, 1);
-  const startOfNextMonth = new Date(year, month, 1);
+  const startOfMonth = getPeriodMonthStart(year, month);
+  const startOfNextMonth = getNextPeriodMonthStart(year, month);
 
   await ensureRecurringPeriodsForMonth(prisma as any, { year, month, groupId: id });
 

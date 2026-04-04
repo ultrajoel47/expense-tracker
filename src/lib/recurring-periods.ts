@@ -40,11 +40,11 @@ type PrismaLike = {
 };
 
 export function getPeriodMonthStart(year: number, month: number) {
-  return new Date(year, month - 1, 1);
+  return new Date(Date.UTC(year, month - 1, 1));
 }
 
 export function getNextPeriodMonthStart(year: number, month: number) {
-  return new Date(year, month, 1);
+  return new Date(Date.UTC(year, month, 1));
 }
 
 function sameMonth(date: Date, year: number, month: number) {
