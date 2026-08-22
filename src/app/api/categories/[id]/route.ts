@@ -27,14 +27,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     );
   }
 
-  const budgets = await prisma.budget.count({ where: { categoryId: id } });
-  if (budgets > 0) {
-    return NextResponse.json(
-      { error: "No se puede eliminar: tiene presupuestos asociados" },
-      { status: 400 }
-    );
-  }
-
   await prisma.category.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

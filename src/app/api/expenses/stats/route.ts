@@ -77,20 +77,6 @@ export async function GET(req: Request) {
     weeklyTotals.push({ week: label, amount: weekAmount });
   }
 
-  // Budgets and alerts
-  const budgets = await prisma.budget.findMany({
-    where: { userId: session.id, month, year },
-    include: { category: true },
-  });
-
-  const alerts = budgets
-    .map((b: any) => {
-      const spent = byCategory[b.category.name]?.total || 0;
-      const pct = (spent / b.amount) * 100;
-      return { category: b.category.name, budget: b.amount, spent, percentage: Math.round(pct) };
-    })
-    .filter((a: any) => a.percentage >= 80);
-
   // Recent expenses (last 10)
   const recentExpenses = expenses.slice(0, 10).map((e: any) => ({
     id: e.id,
@@ -164,7 +150,6 @@ export async function GET(req: Request) {
     byCategory: Object.values(byCategory).sort((a: any, b: any) => b.total - a.total),
     dailyTotals,
     weeklyTotals,
-    alerts,
     recentExpenses,
     topExpense: topExpense
       ? { amount: topExpense.amount, description: topExpense.description, category: topExpense.category.name }
