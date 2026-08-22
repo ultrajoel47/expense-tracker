@@ -216,11 +216,36 @@ páginas del dashboard. **Debe existir en un solo lugar**; que un gasto personal
 se filtre a las consultas de la otra persona es el peor fallo posible de este
 sistema.
 
-### Borde conocido y aceptado
+### Leer y editar son permisos distintos
 
-Si A registra un gasto de B y la IA lo marca `personal`, el pagador es B, así
-que **A deja de verlo**: la confirmación del bot es la última vez que lo ve. Es
-coherente con la regla y fue una decisión explícita.
+La regla de arriba gobierna la **lectura**: la web, los gráficos, las
+exportaciones y las consultas al bot. La **edición vía Telegram** se rige por
+otra regla, y la distinción es deliberada:
+
+| | Puede leerlo | Puede editarlo por el bot |
+|---|---|---|
+| `scope: casa` | los dos | los dos |
+| `scope: personal` | sólo `userId` (quién pagó) | `userId` **o** `createdById` |
+
+El razonamiento: la web es la vista propia de cada uno, detrás de su login, y no
+tiene sentido que muestre un gasto que no es tuyo. El mensaje de confirmación en
+Telegram, en cambio, es un artefacto del acto de cargarlo — y poder arreglar una
+carga mal hecha es legítimo.
+
+Concretamente: si A registra un gasto `personal` de B, A **no lo ve** en la web
+ni en sus totales, pero **sí puede corregirlo** desde los botones o el reply del
+mensaje de confirmación que quedó en su chat. Nada más que eso.
+
+**Implementación:** son dos funciones separadas, no una. `visibleExpensesWhere`
+para lectura, y una comprobación aparte en el handler de callbacks y de replies
+del bot. Colapsarlas en una sola es el error a evitar: si se usa el permiso de
+edición para leer, se filtran gastos personales; si se usa el de lectura para
+editar, A no puede arreglar lo que acaba de cargar.
+
+**Consecuencia aceptada:** los botones muestran el estado del gasto al
+redibujar el mensaje, así que si B modifica ese gasto después, A lo vería
+actualizado al tocar un botón viejo. Con dos usuarios que comparten la plata es
+irrelevante, pero queda dicho para que no aparezca después como sorpresa.
 
 ## 6. Pipeline de ingesta
 
@@ -574,39 +599,58 @@ trabajo, no después.
 | El free tier de xAI no alcanza | Medio | Verificar antes de codear; el seam de `AiProvider` lo hace intercambiable |
 | Corrección aplicada al gasto equivocado | Medio: corrupción silenciosa | Reply + `botMessageId`, y `callback_data` con `expenseId` en los botones |
 
-## 16. Fases de implementación
+## 16. Rebanadas de implementación
 
-El alcance total es demasiado grande para un solo plan (borrado de 11 archivos,
-reescritura de 9, y ~15 archivos nuevos entre bot, IA, OCR y consultas). Se
-divide en tres fases, cada una **utilizable por sí sola** y con su propio plan de
-implementación.
+El alcance total es demasiado grande para un solo plan: 11 archivos borrados, 9
+reescritos y ~15 nuevos entre bot, IA, OCR y consultas.
 
-### Fase 1 — El recorte
+El corte es **vertical**: cada rebanada atraviesa todo el stack y queda
+**funcional de punta a punta**, en vez de completar una capa por vez. Cada una
+tiene su propio plan de implementación.
 
-Schema nuevo con `prisma db push`, borrado de los modelos, rutas y páginas
-listados en la sección 11, `src/lib/visibility.ts` aplicado en todas las
-consultas, materialización de recurrentes, gráficos (incluida la tendencia de 12
-meses), `JWT_SECRET` obligatorio y `.env.example`.
+| # | Rebanada | Qué se puede hacer al terminarla |
+|---|---|---|
+| 1 | Un gasto escrito, punta a punta | Mandar "12 lucas panadería" al bot y verlo en la web |
+| 2 | Correcciones | Botones, texto libre y reply sobre un gasto ya guardado |
+| 3 | Recurrentes y gráficos | El alquiler entra en los totales; tendencia de 12 meses |
+| 4 | Comprobantes por foto | Mandar una captura de MercadoPago y que salga el gasto |
+| 5 | Aliases | Una transferencia a un destinatario conocido ya sale categorizada |
+| 6 | Consultas | Preguntarle al bot cuánto se gastó en una categoría |
 
-**Resultado:** la app queda simplificada y funcionando, sin bot. Sirve sola.
+### Rebanada 1 — Un gasto escrito, punta a punta
 
-### Fase 2 — El bot y la IA de texto
+Es la más grande y **no se puede adelgazar**: el schema nuevo rompe la
+compilación de todas las páginas que sobreviven, porque usan `shares`, `groupId`
+y `splitMode`. La demolición y el arreglo de esos archivos entran acá por
+necesidad, no por inflación de alcance. No hay forma de tener un gasto andando
+punta a punta sobre un schema que no compila.
 
-Webhook con validación de secret, whitelist e idempotencia; vinculación por
-`/start`; `AiProvider` + `parseMessage` para los intents `gasto` y `correccion`;
-confirmación con botones inline y correcciones por reply o por último gasto.
+Incluye: schema completo de la sección 4 con `prisma db push`; borrado de todo lo
+listado en la sección 11; arreglo de los archivos que sobreviven; `visibility.ts`
+aplicado en `expenses` y `export`; `JWT_SECRET` obligatorio y `.env.example`;
+vinculación por `/start`; webhook con secret, whitelist e idempotencia;
+`AiProvider` + `parseMessage` limitado al intent `gasto`; confirmación en
+Telegram; y el gasto visible en `/dashboard/expenses`.
 
-**Resultado:** cero forms para gastos escritos. Es el objetivo central del
-proyecto.
+El schema se aplica **completo** desde el principio, con los campos que las
+rebanadas siguientes van a usar (`botMessageId`, `recurringPeriod`, `Alias`,
+`ProcessedUpdate`), para no volver a migrar en cada rebanada.
 
-### Fase 3 — Comprobantes, aliases y consultas
+### Rebanadas 2 a 6
 
-`OcrEngine` con el backend WASM; el intent `consulta` con la agregación en
-Prisma; los aliases con su aprendizaje automático al corregir.
+Cada una suma una capacidad sobre una base que ya funciona:
 
-**Resultado:** comprobantes por foto, memoria de destinatarios y preguntas al
-bot.
+- **2 — Correcciones.** Intent `correccion`, botones inline con `expenseId` en el
+  `callback_data`, resolución por reply vía `botMessageId` y por último gasto vía
+  `createdById`, y la comprobación de permiso de edición de la sección 5.
+- **3 — Recurrentes y gráficos.** `recurring-materialize.ts`, la reescritura de
+  `stats/route.ts` y la tendencia de 12 meses.
+- **4 — Comprobantes.** `OcrEngine` con el backend WASM y el fallback a pedir el
+  monto por texto.
+- **5 — Aliases.** Lookup, normalización, inyección en el prompt y el aprendizaje
+  automático al corregir. Depende de la rebanada 2: sin correcciones no hay de
+  qué aprender.
+- **6 — Consultas.** Intent `consulta` y `queries/aggregate.ts`.
 
-El orden importa: la fase 1 deja el modelo de datos estable antes de construir
-encima, y la fase 3 depende de que las correcciones de la fase 2 existan para
-poder aprender de ellas.
+La documentación de la sección 14 se actualiza en la rebanada que la invalida,
+no al final: `CLAUDE.md` y `docs/data-models.md` en la 1, el resto a medida.
