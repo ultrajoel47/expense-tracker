@@ -15,26 +15,11 @@ interface CreditCard {
   color: string;
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
-
 interface Installment {
   installmentNumber: number;
   dueDate: string;
   amount: number;
   paid: boolean;
-}
-
-interface ShareEntry {
-  id: string;
-  userId: string;
-  percentage: number;
-  amount: number;
-  settled: boolean;
-  user: { id: string; name: string };
 }
 
 interface Expense {
@@ -45,25 +30,8 @@ interface Expense {
   category: Category;
   creditCard: CreditCard | null;
   totalInstallments: number | null;
-  isShared: boolean;
-  splitMode: string;
   installments: Installment[];
-  shares: ShareEntry[];
 }
-
-interface GroupMember {
-  userId: string;
-  percentage: number;
-  user: { id: string; name: string };
-}
-
-interface Group {
-  id: string;
-  name: string;
-  members: GroupMember[];
-}
-
-type ManualShare = { userId: string; name: string; percentage: number };
 
 const emptyForm = {
   amount: "",
@@ -72,11 +40,6 @@ const emptyForm = {
   categoryId: "",
   creditCardId: "",
   totalInstallments: "1",
-  isShared: false,
-  splitMode: "auto" as "auto" | "manual",
-  sharedUserIds: [] as string[],
-  manualShares: [] as ManualShare[],
-  groupId: "",
 };
 
 const inputCls =
@@ -88,9 +51,6 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -104,14 +64,10 @@ export default function ExpensesPage() {
   const [totalCount, setTotalCount] = useState(0);
   const LIMIT = 25;
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [expandedShareId, setExpandedShareId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/categories").then((r) => r.json()).then(setCategories);
     fetch("/api/credit-cards").then((r) => r.json()).then(setCreditCards);
-    fetch("/api/auth/users").then((r) => r.ok ? r.json() : []).then((d) => setUsers(Array.isArray(d) ? d : []));
-    fetch("/api/auth/me").then((r) => r.ok ? r.json() : null).then((d) => d?.user && setCurrentUser(d.user));
-    fetch("/api/groups").then((r) => r.ok ? r.json() : []).then((d) => setGroups(Array.isArray(d) ? d : []));
   }, []);
 
   // Debounce description input
@@ -164,81 +120,6 @@ export default function ExpensesPage() {
 
   const monthLabel = new Date(filterYear, filterMonth - 1).toLocaleDateString("es", { month: "long", year: "numeric" });
 
-  function toggleParticipant(user: User, checked: boolean) {
-    if (form.splitMode === "auto") {
-      const ids = checked
-        ? [...form.sharedUserIds, user.id]
-        : form.sharedUserIds.filter((id) => id !== user.id);
-      setForm({ ...form, sharedUserIds: ids });
-    } else {
-      const shares = checked
-        ? [...form.manualShares, { userId: user.id, name: user.name, percentage: 0 }]
-        : form.manualShares.filter((s) => s.userId !== user.id);
-      setForm({ ...form, manualShares: shares });
-    }
-  }
-
-  function updateManualPct(userId: string, pct: number) {
-    setForm({
-      ...form,
-      manualShares: form.manualShares.map((s) => s.userId === userId ? { ...s, percentage: pct } : s),
-    });
-  }
-
-  function switchSplitMode(mode: "auto" | "manual") {
-    if (mode === "manual" && currentUser) {
-      const participants = [
-        { userId: currentUser.id, name: currentUser.name, percentage: 0 },
-        ...form.sharedUserIds.map((uid) => {
-          const u = users.find((x) => x.id === uid);
-          return { userId: uid, name: u?.name ?? uid, percentage: 0 };
-        }),
-      ];
-      setForm({ ...form, splitMode: "manual", manualShares: participants, sharedUserIds: [] });
-    } else {
-      setForm({ ...form, splitMode: "auto", manualShares: [], sharedUserIds: [] });
-    }
-  }
-
-  function handleGroupSelect(gId: string) {
-    if (!gId) {
-      setForm((prev) => ({ ...prev, groupId: "" }));
-      return;
-    }
-    const group = groups.find((g) => g.id === gId);
-    if (!group) return;
-
-    if (form.splitMode === "auto") {
-      const memberIds = group.members
-        .map((m) => m.userId)
-        .filter((id) => id !== currentUser?.id);
-      setForm((prev) => ({
-        ...prev,
-        groupId: gId,
-        isShared: true,
-        splitMode: "auto",
-        sharedUserIds: memberIds,
-        manualShares: [],
-      }));
-    } else {
-      const manualShares = group.members.map((m) => ({
-        userId: m.userId,
-        name: m.user.name,
-        percentage: m.percentage,
-      }));
-      setForm((prev) => ({
-        ...prev,
-        groupId: gId,
-        isShared: true,
-        splitMode: "manual",
-        manualShares,
-        sharedUserIds: [],
-      }));
-    }
-  }
-
-  const manualTotal = form.manualShares.reduce((s, u) => s + (Number(u.percentage) || 0), 0);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -248,21 +129,7 @@ export default function ExpensesPage() {
         amount: Number(form.amount),
         totalInstallments: Number(form.totalInstallments) > 1 ? Number(form.totalInstallments) : null,
         creditCardId: form.creditCardId || null,
-        groupId: form.groupId || null,
       };
-
-      if (form.isShared) {
-        if (form.splitMode === "manual") {
-          payload.sharedUsers = form.manualShares.map(({ userId, percentage }) => ({ userId, percentage: Number(percentage) }));
-          payload.sharedUserIds = undefined;
-        } else {
-          payload.sharedUserIds = form.sharedUserIds;
-          payload.sharedUsers = undefined;
-        }
-      } else {
-        payload.sharedUserIds = [];
-        payload.sharedUsers = undefined;
-      }
 
       if (editId !== null) {
         await fetch(`/api/expenses/${editId}`, {
@@ -297,23 +164,6 @@ export default function ExpensesPage() {
   }
 
   function handleEdit(exp: Expense) {
-    let manualShares: ManualShare[] = [];
-    if (exp.splitMode === "manual") {
-      const nonPayerShares = exp.shares
-        .filter((s) => s.userId !== currentUser?.id)
-        .map((s) => ({ userId: s.userId, name: s.user.name, percentage: s.percentage }));
-      const nonPayerTotal = nonPayerShares.reduce((sum, s) => sum + s.percentage, 0);
-      const payerPct = Math.max(0, 100 - nonPayerTotal);
-      if (currentUser) {
-        manualShares = [
-          { userId: currentUser.id, name: currentUser.name, percentage: payerPct },
-          ...nonPayerShares,
-        ];
-      } else {
-        manualShares = nonPayerShares;
-      }
-    }
-
     setEditId(exp.id);
     setForm({
       amount: String(exp.amount),
@@ -322,13 +172,6 @@ export default function ExpensesPage() {
       categoryId: exp.category.id,
       creditCardId: exp.creditCard?.id ?? "",
       totalInstallments: String(exp.totalInstallments ?? 1),
-      isShared: exp.isShared,
-      splitMode: (exp.splitMode as "auto" | "manual") ?? "auto",
-      sharedUserIds: exp.splitMode !== "manual"
-        ? exp.shares.filter((s) => s.userId !== currentUser?.id).map((s) => s.userId)
-        : [],
-      manualShares,
-      groupId: "",
     });
   }
 
@@ -435,8 +278,8 @@ export default function ExpensesPage() {
             </div>
           </div>
 
-          {/* Row 2: Credit card, Installments, Shared toggle */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          {/* Row 2: Credit card, Installments */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             <div>
               <label className={labelCls}>Tarjeta</label>
               <select
@@ -462,242 +305,7 @@ export default function ExpensesPage() {
                 className={inputCls}
               />
             </div>
-
-            <div>
-              <label className={labelCls}>&nbsp;</label>
-              <label className="flex items-center gap-3 w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                <input
-                  type="checkbox"
-                  checked={form.isShared}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    if (checked && groups.length > 0) {
-                      const firstGroup = groups[0];
-                      const memberIds = firstGroup.members
-                        .map((m) => m.userId)
-                        .filter((id) => id !== currentUser?.id);
-                      setForm({
-                        ...form,
-                        isShared: true,
-                        groupId: firstGroup.id,
-                        splitMode: "auto",
-                        sharedUserIds: memberIds,
-                        manualShares: [],
-                      });
-                    } else {
-                      setForm({ ...form, isShared: checked, groupId: "", splitMode: "auto", sharedUserIds: [], manualShares: [] });
-                    }
-                  }}
-                  className="w-4 h-4 accent-indigo-600 shrink-0"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-200">Gasto compartido</span>
-              </label>
-            </div>
           </div>
-
-          {/* Shared section */}
-          {form.isShared && (
-            <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/60 overflow-hidden shadow-sm">
-              {/* Panel header */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-indigo-100 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-950/40">
-                <svg className="w-3.5 h-3.5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">Reparto</span>
-              </div>
-
-              <div className="p-4 space-y-4 bg-indigo-50/40 dark:bg-indigo-900/10">
-                {/* Controls row: Group + Mode */}
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Group selector */}
-                  {groups.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Grupo:</span>
-                      <select
-                        value={form.groupId}
-                        onChange={(e) => handleGroupSelect(e.target.value)}
-                        className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100"
-                      >
-                        <option value="">Sin grupo</option>
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                      </select>
-                      {form.groupId && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                          <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          {groups.find((g) => g.id === form.groupId)?.name}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Split mode toggle — pill style */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Modo:</span>
-                    <div className="flex p-0.5 rounded-lg bg-gray-100 dark:bg-gray-700/60 text-xs font-medium">
-                      <button
-                        type="button"
-                        onClick={() => switchSplitMode("auto")}
-                        className={`px-3 py-1.5 rounded-md transition-all duration-150 ${
-                          form.splitMode === "auto"
-                            ? "bg-white dark:bg-gray-700 text-indigo-700 dark:text-indigo-300 shadow-sm font-semibold"
-                            : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                        }`}
-                      >
-                        Auto
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => switchSplitMode("manual")}
-                        className={`px-3 py-1.5 rounded-md transition-all duration-150 ${
-                          form.splitMode === "manual"
-                            ? "bg-white dark:bg-gray-700 text-indigo-700 dark:text-indigo-300 shadow-sm font-semibold"
-                            : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                        }`}
-                      >
-                        Manual (%)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Auto mode: participant chips */}
-                {form.splitMode === "auto" && users.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-                      Participantes (además de vos):
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {users.map((u) => {
-                        const isSelected = form.sharedUserIds.includes(u.id);
-                        return (
-                          <label
-                            key={u.id}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-all duration-150 select-none ${
-                              isSelected
-                                ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
-                                : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-300"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => toggleParticipant(u, e.target.checked)}
-                              className="sr-only"
-                            />
-                            {isSelected && (
-                              <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                            <span className="font-medium">{u.name}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {form.sharedUserIds.length > 0 && (
-                      <p className="mt-2 text-xs text-indigo-600 dark:text-indigo-400">
-                        {form.sharedUserIds.length + 1} participantes · split por ingresos
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Manual mode: percentage inputs */}
-                {form.splitMode === "manual" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                        Participantes y porcentajes:
-                      </p>
-                      <span
-                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                          Math.abs(manualTotal - 100) > 1
-                            ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                            : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                        }`}
-                      >
-                        Total: {manualTotal.toFixed(1)}%
-                      </span>
-                    </div>
-
-                    {/* Add participants — chip style */}
-                    {users.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {users.map((u) => {
-                          const inShares = form.manualShares.some((s) => s.userId === u.id);
-                          return (
-                            <label
-                              key={u.id}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm cursor-pointer transition-all duration-150 select-none ${
-                                inShares
-                                  ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
-                                  : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-700 dark:hover:text-indigo-300"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={inShares}
-                                onChange={(e) => toggleParticipant(u, e.target.checked)}
-                                className="sr-only"
-                              />
-                              {inShares && (
-                                <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              <span className="font-medium">{u.name}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  {/* Percentage rows */}
-                  <div className="space-y-2">
-                    {form.manualShares.map((s) => (
-                      <div key={s.userId} className="flex items-center gap-2 min-w-0">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center shrink-0">
-                            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                              {s.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <span className="text-sm truncate text-gray-700 dark:text-gray-300 min-w-0">
-                            {s.name}
-                            {s.userId === currentUser?.id && (
-                              <span className="ml-1 text-xs text-indigo-500 dark:text-indigo-400">(vos)</span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value={s.percentage}
-                            onChange={(e) => updateManualPct(s.userId, Number(e.target.value))}
-                            className="w-16 sm:w-20 px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100 text-right"
-                          />
-                          <span className="text-sm text-gray-400">%</span>
-                        </div>
-                        {form.amount && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0 hidden sm:inline">
-                            = ${formatCurrency((Number(form.amount) * Number(s.percentage)) / 100)}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Installment preview */}
           {installmentPreview.length > 0 && (
@@ -826,11 +434,6 @@ export default function ExpensesPage() {
                           {exp.totalInstallments}c
                         </span>
                       )}
-                      {exp.isShared && (
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-medium">
-                          compartido
-                        </span>
-                      )}
                       <span className="text-xs text-gray-400 dark:text-gray-500">
                         · {new Date(exp.date).toLocaleDateString("es")}
                       </span>
@@ -854,18 +457,6 @@ export default function ExpensesPage() {
                           }`}
                         >
                           Cuotas
-                        </button>
-                      )}
-                      {exp.isShared && exp.shares.length > 0 && (
-                        <button
-                          onClick={() => setExpandedShareId(expandedShareId === exp.id ? null : exp.id)}
-                          className={`text-xs px-2 py-1 rounded-md font-medium transition border ${
-                            expandedShareId === exp.id
-                              ? "bg-purple-600 text-white border-purple-600"
-                              : "border-purple-200 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30"
-                          }`}
-                        >
-                          Reparto
                         </button>
                       )}
                       <button
@@ -909,47 +500,6 @@ export default function ExpensesPage() {
                           </span>
                         </button>
                       ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Shares expand */}
-                {expandedShareId === exp.id && exp.shares.length > 0 && (
-                  <div className="px-5 pb-4 pt-3 bg-purple-50/60 dark:bg-purple-900/10 border-t border-purple-100 dark:border-purple-900">
-                    <p className="text-xs font-semibold text-purple-700 dark:text-purple-300 uppercase tracking-wide mb-2">
-                      Reparto
-                    </p>
-                    <div className="rounded-lg border border-purple-100 dark:border-purple-800 overflow-hidden overflow-x-auto">
-                      <table className="w-full text-sm min-w-[320px]">
-                        <thead className="bg-purple-50 dark:bg-purple-900/30">
-                          <tr className="text-left">
-                            <th className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Participante</th>
-                            <th className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">%</th>
-                            <th className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Monto</th>
-                            <th className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-purple-50 dark:divide-purple-900/30">
-                          {exp.shares.map((s) => (
-                            <tr key={s.id} className="bg-white dark:bg-gray-800">
-                              <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{s.user.name}</td>
-                              <td className="px-3 py-2 text-gray-500 dark:text-gray-400">{s.percentage.toFixed(1)}%</td>
-                              <td className="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">${formatCurrency(s.amount)}</td>
-                              <td className="px-3 py-2">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    s.settled
-                                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                      : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-                                  }`}
-                                >
-                                  {s.settled ? "Liquidado" : "Pendiente"}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
                     </div>
                   </div>
                 )}

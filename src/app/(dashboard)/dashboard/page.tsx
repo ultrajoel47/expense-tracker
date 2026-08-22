@@ -32,12 +32,9 @@ interface Stats {
   byCategory: { name: string; color: string; total: number; count: number }[];
   dailyTotals: { date: string; amount: number; cumulative: number }[];
   weeklyTotals: { week: string; amount: number }[];
-  alerts: { category: string; budget: number; spent: number; percentage: number }[];
   recentExpenses: RecentExpense[];
   topExpense: { amount: number; description: string; category: string } | null;
   allTimeRecent: RecentExpense[];
-  incomeAmount: number | null;
-  spendingPercentage: number | null;
   totalCreditCardDebt: number;
   upcomingRecurring: UpcomingRecurring[];
 }
@@ -92,42 +89,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Budget alerts */}
-      {stats.alerts.length > 0 && (
-        <div className="space-y-2">
-          {stats.alerts.map((a) => (
-            <div
-              key={a.category}
-              className={`p-3 rounded-lg text-sm font-medium ${
-                a.percentage >= 100
-                  ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
-                  : "bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-800"
-              }`}
-            >
-              {a.percentage >= 100 ? "Excedido" : "Alerta"}: {a.category} - Gastado ${formatCurrency(a.spent)} de ${formatCurrency(a.budget)} ({a.percentage}%)
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* New feature widgets */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border dark:border-gray-700">
-          <p className="text-sm text-gray-500 dark:text-gray-400">% del Ingreso Gastado</p>
-          {stats.spendingPercentage !== null ? (
-            <>
-              <p className={`text-3xl font-bold ${stats.spendingPercentage > 80 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                {stats.spendingPercentage}%
-              </p>
-              <p className="text-xs text-gray-400 mt-1">de ${stats.incomeAmount != null ? formatCurrency(stats.incomeAmount) : ""} ingreso</p>
-            </>
-          ) : (
-            <>
-              <p className="text-3xl font-bold text-gray-300 dark:text-gray-600">-</p>
-              <p className="text-xs text-gray-400 mt-1">Registra tu ingreso mensual</p>
-            </>
-          )}
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border dark:border-gray-700">
           <p className="text-sm text-gray-500 dark:text-gray-400">Deuda en Tarjetas</p>
           <p className={`text-3xl font-bold ${stats.totalCreditCardDebt > 0 ? "text-orange-500 dark:text-orange-400" : "text-gray-300 dark:text-gray-600"}`}>
