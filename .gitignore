@@ -44,3 +44,6 @@ dev.db
 next-env.d.ts
 
 /src/generated/prisma
+
+# backups de datos (contienen hashes de password)
+/backups/
