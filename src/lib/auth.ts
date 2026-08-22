@@ -1,7 +1,8 @@
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import { requireEnv } from "./env";
 
-const JWT_SECRET = process.env.JWT_SECRET || "expense-tracker-secret-demo-key";
+const JWT_SECRET = requireEnv("JWT_SECRET");
 
 export function signToken(payload: { id: string; email: string }) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });

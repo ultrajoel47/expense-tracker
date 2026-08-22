@@ -95,7 +95,10 @@ export async function POST(req: Request) {
         categoryId,
         creditCardId: creditCardId || null,
         totalInstallments: numInstallments,
+        // userId = quien pago, createdById = quien lo registro. Desde la web
+        // son la misma persona; el bot es el que los puede separar.
         userId: session.id,
+        createdById: session.id,
         installments: numInstallments
           ? {
               create: Array.from({ length: numInstallments }, (_, i) => {
