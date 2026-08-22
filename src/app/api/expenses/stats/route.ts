@@ -109,15 +109,6 @@ export async function GET(req: Request) {
     }));
   }
 
-  // Monthly income and spending percentage
-  const monthlyIncome = await prisma.monthlyIncome.findFirst({
-    where: { userId: session.id, month, year },
-  });
-  const incomeAmount = monthlyIncome?.amount ?? null;
-  const spendingPercentage = incomeAmount && incomeAmount > 0
-    ? Math.round((total / incomeAmount) * 100)
-    : null;
-
   // Credit card pending totals
   const creditCardDebt = await prisma.installment.groupBy({
     by: ["expenseId"],
@@ -155,8 +146,6 @@ export async function GET(req: Request) {
       ? { amount: topExpense.amount, description: topExpense.description, category: topExpense.category.name }
       : null,
     allTimeRecent,
-    incomeAmount,
-    spendingPercentage,
     totalCreditCardDebt,
     upcomingRecurring: upcomingRecurring.map((r: any) => ({
       id: r.id,
