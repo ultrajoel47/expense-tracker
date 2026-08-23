@@ -5,6 +5,7 @@ import {
   applyCorrection,
   deleteExpenseWithInstallments,
   rebuildInstallments,
+  requiereRebuildDeCuotas,
   type CorrectableExpense,
 } from "../src/lib/expenses/correct.ts";
 
@@ -381,4 +382,36 @@ test("deleteExpenseWithInstallments escribe a traves del tx, nunca del cliente d
   assert.equal(fuera.deleteMany.length, 0);
   assert.equal(dentro.delete.length, 1);
   assert.equal(dentro.deleteMany.length, 1);
+});
+
+// ─── requiereRebuildDeCuotas ─────────────────────────────────────────────────
+
+test("requiereRebuildDeCuotas: mismo mes, distinto dia -> false", () => {
+  const antes = { amount: 1000, date: new Date("2026-08-10T12:00:00.000Z") };
+  const despues = { amount: 1000, date: new Date("2026-08-25T03:00:00.000Z") };
+  assert.equal(requiereRebuildDeCuotas(antes, despues), false);
+});
+
+test("requiereRebuildDeCuotas: distinto mes -> true", () => {
+  const antes = { amount: 1000, date: new Date("2026-08-10T12:00:00.000Z") };
+  const despues = { amount: 1000, date: new Date("2026-09-01T00:00:00.000Z") };
+  assert.equal(requiereRebuildDeCuotas(antes, despues), true);
+});
+
+test("requiereRebuildDeCuotas: distinto año, mismo mes calendario -> true", () => {
+  const antes = { amount: 1000, date: new Date("2026-08-10T12:00:00.000Z") };
+  const despues = { amount: 1000, date: new Date("2027-08-10T12:00:00.000Z") };
+  assert.equal(requiereRebuildDeCuotas(antes, despues), true);
+});
+
+test("requiereRebuildDeCuotas: distinto monto -> true", () => {
+  const antes = { amount: 1000, date: new Date("2026-08-10T12:00:00.000Z") };
+  const despues = { amount: 1001, date: new Date("2026-08-10T12:00:00.000Z") };
+  assert.equal(requiereRebuildDeCuotas(antes, despues), true);
+});
+
+test("requiereRebuildDeCuotas: nada distinto -> false", () => {
+  const antes = { amount: 1000, date: new Date("2026-08-10T12:00:00.000Z") };
+  const despues = { amount: 1000, date: new Date("2026-08-10T12:00:00.000Z") };
+  assert.equal(requiereRebuildDeCuotas(antes, despues), false);
 });

@@ -125,6 +125,33 @@ export type CorrectedExpense = {
 };
 
 /**
+ * Si hay que recalcular las cuotas de un gasto.
+ *
+ * La fecha se compara por **año y mes**, no por instante: `buildInstallments`
+ * solo usa el año y el mes de la fecha de compra, asi que un cambio de hora o de
+ * dia dentro del mismo mes produce exactamente las mismas filas. Antes esto
+ * estaba escrito de dos formas distintas —el PUT de la web por año/mes y la
+ * correccion del bot por `getTime()`— y la version del bot recalculaba de mas:
+ * "cambiale la fecha a ayer" dentro del mismo mes disparaba un rebuild que la
+ * web evita como churn puro, y sin la transaccion/upsert de C2 ese churn "sin
+ * efecto" borraba los `paid`.
+ *
+ * Vive acá y se exporta para que no vuelva a haber dos criterios: los dos
+ * caminos que pueden cambiar el monto o la fecha de un gasto tienen que decidir
+ * igual.
+ */
+export function requiereRebuildDeCuotas(
+  antes: { amount: number; date: Date },
+  despues: { amount: number; date: Date }
+): boolean {
+  const cambioElMonto = despues.amount !== antes.amount;
+  const mismoMesYAnio =
+    despues.date.getUTCFullYear() === antes.date.getUTCFullYear() &&
+    despues.date.getUTCMonth() === antes.date.getUTCMonth();
+  return cambioElMonto || !mismoMesYAnio;
+}
+
+/**
  * Aplica el patch y devuelve el estado resultante.
  *
  * **Las cuotas se reconstruyen cuando cambia el monto o la fecha.** Despues de
@@ -166,13 +193,10 @@ export async function applyCorrection(
     categoryId,
   };
 
-  const cambioElMonto = merged.amount !== expense.amount;
-  const cambioLaFecha = merged.date.getTime() !== expense.date.getTime();
-
   await client.$transaction(async (tx) => {
     await tx.expense.update({ where: { id: expense.id }, data: merged });
 
-    if (expense.totalInstallments && (cambioElMonto || cambioLaFecha)) {
+    if (expense.totalInstallments && requiereRebuildDeCuotas(expense, merged)) {
       // `tx`, no `client`: ya estamos DENTRO de la transaccion que abrimos
       // arriba. Llamar a `rebuildInstallments` (la exportada) anidaria un
       // `$transaction` dentro de otro; por eso el cuerpo vive aparte en
