@@ -80,6 +80,35 @@ export async function editMessageText(
  * la correccion YA se aplico, asi que tirar convertiria un exito con un acuse
  * perdido en un camino de error. Se loguea y sigue.
  */
+/**
+ * Cambia SOLO el teclado de un mensaje, sin tocar su texto. Es lo que usan los
+ * botones de navegacion (abrir categorias, volver, confirmar borrado): no
+ * cambian el gasto, asi que reconstruir el texto de la confirmacion seria
+ * arriesgar un texto mal armado sin ninguna ganancia.
+ */
+export async function editMessageReplyMarkup(
+  chatId: string | number,
+  messageId: string | number,
+  replyMarkup: unknown
+): Promise<void> {
+  const res = await fetch(apiUrl("editMessageReplyMarkup"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: Number(messageId),
+      reply_markup: replyMarkup,
+    }),
+  });
+
+  const json = await res.json();
+  // Misma tolerancia que editMessageText: tocar dos veces el mismo boton de
+  // menu re-renderiza el mismo teclado, y eso NO es una falla.
+  if (!json.ok && !String(json.description ?? "").includes("message is not modified")) {
+    throw new Error(`Telegram editMessageReplyMarkup fallo: ${JSON.stringify(json)}`);
+  }
+}
+
 export async function answerCallbackQuery(
   callbackQueryId: string,
   text?: string
