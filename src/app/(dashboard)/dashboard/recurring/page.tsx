@@ -35,6 +35,20 @@ const FREQ_LABELS: Record<string, string> = {
   YEARLY: "Anual",
 };
 
+/**
+ * Las unicas frecuencias que `materializeRecurringForMonth` convierte en
+ * gastos, y por lo tanto en plata contada en algun total. El formulario
+ * ofrece SOLO estas: una plantilla semanal o anual se guardaba, se listaba,
+ * aparecia en "proximos vencimientos" y no entraba en ningun total, nunca —
+ * el mismo sub-conteo silencioso que esta rebanada vino a cerrar.
+ *
+ * Las plantillas existentes con otra frecuencia (hoy no hay ninguna: las 10
+ * reales son MONTHLY) se siguen mostrando en la lista, marcadas como que no
+ * suman. Si algun dia el materializador aprende semanal o anual, agregar la
+ * frecuencia aca alcanza para que vuelva al formulario.
+ */
+const FREQ_MATERIALIZADAS = ["MONTHLY"] as const;
+
 const emptyForm = {
   amount: "",
   description: "",
@@ -209,10 +223,20 @@ export default function RecurringPage() {
                 className={inputCls}
                 required
               >
-                {Object.entries(FREQ_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                {FREQ_MATERIALIZADAS.map((value) => (
+                  <option key={value} value={value}>{FREQ_LABELS[value]}</option>
                 ))}
+                {/* Editar una plantilla vieja con otra frecuencia no se la
+                    cambia en silencio: se ofrece su valor actual tambien. */}
+                {!FREQ_MATERIALIZADAS.includes(form.frequency as "MONTHLY") && (
+                  <option value={form.frequency}>
+                    {FREQ_LABELS[form.frequency] ?? form.frequency} (no suma a los totales)
+                  </option>
+                )}
               </select>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Por ahora solo las mensuales se suman a los totales.
+              </p>
             </div>
 
             <div>
@@ -313,9 +337,18 @@ export default function RecurringPage() {
                     {rec.creditCard && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">· {rec.creditCard.name}</span>
                     )}
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">
-                      {FREQ_LABELS[rec.frequency] ?? rec.frequency}
-                    </span>
+                    {FREQ_MATERIALIZADAS.includes(rec.frequency as "MONTHLY") ? (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">
+                        {FREQ_LABELS[rec.frequency] ?? rec.frequency}
+                      </span>
+                    ) : (
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                        title="Esta frecuencia todavia no se convierte en gastos: no se suma a ningun total"
+                      >
+                        {FREQ_LABELS[rec.frequency] ?? rec.frequency} · no suma a los totales
+                      </span>
+                    )}
                     {rec.dayOfMonth !== null && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">· día {rec.dayOfMonth}</span>
                     )}
