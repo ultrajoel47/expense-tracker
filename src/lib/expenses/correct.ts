@@ -1,4 +1,4 @@
-import { buildInstallments } from "./installments.ts";
+import { buildInstallments, type InstallmentRow } from "./installments.ts";
 import type { CorreccionPatch } from "../ai/types.ts";
 
 /** Los campos del Expense que una correccion necesita leer. */
@@ -32,13 +32,11 @@ export type CorrectClient = {
     // La forma de una fila, no `unknown[]`: el `createMany` real de Prisma
     // tipa `data` como `Fila | Fila[]` (acepta una sola fila suelta), y un
     // `unknown[]` no es asignable a esa union porque el miembro no-array no
-    // es un array. Con la forma real de la fila (los mismos campos que
-    // `InstallmentRow` de `installments.ts` mas `expenseId`, el unico shape
-    // que arma `rebuildInstallments` mas abajo) la asignacion estructural
-    // contra el Prisma real cierra sin importar `@prisma/client`.
-    createMany(args: {
-      data: { expenseId: string; installmentNumber: number; dueDate: Date; amount: number }[];
-    }): Promise<unknown>;
+    // es un array. `InstallmentRow & { expenseId: string }` en vez de repetir
+    // sus cuatro campos a mano: es el mismo shape que arma `rebuildInstallments`
+    // mas abajo, importado de `installments.ts` para no duplicarlo — si
+    // `buildInstallments` gana un campo, este tipo lo hereda solo.
+    createMany(args: { data: (InstallmentRow & { expenseId: string })[] }): Promise<unknown>;
   };
 };
 
@@ -76,7 +74,17 @@ export async function resolveCorrectionTarget(
   }
 
   const ultimo = await client.expense.findFirst({
-    where: { createdById: actorId },
+    // `source: { not: "recurring" }` y no un filtro por `recurringExpenseId`:
+    // `source` tiene default y esta siempre presente, asi que el predicado no
+    // depende de si Mongo guardo el campo opcional como null o ausente.
+    //
+    // Una fila materializada NO la registro nadie: la creo una lectura de un
+    // mes (`materializeRecurringForMonth` corre en el GET de /api/expenses y
+    // de /stats, con `createdById` del dueño de la plantilla y `createdAt` de
+    // ese instante). Sin este filtro, abrir el dashboard el primero de mes
+    // pone 10 filas nuevas adelante de la cola y el respaldo apunta al
+    // alquiler en vez de al ultimo gasto que la persona realmente cargo.
+    where: { createdById: actorId, source: { not: "recurring" } },
     orderBy: { createdAt: "desc" },
   });
   return ultimo ? { expense: ultimo } : { expense: null, reason: "sin_gastos" };

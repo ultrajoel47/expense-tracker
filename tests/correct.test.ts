@@ -82,9 +82,20 @@ test("sin reply busca por createdById con orderBy createdAt desc, y el where no 
   assert.deepEqual(result, { expense: GASTO_BASE });
   assert.equal(llamadas.findFirst.length, 1);
   const { where, orderBy } = llamadas.findFirst[0];
-  assert.deepEqual(where, { createdById: "u1" });
+  assert.deepEqual(where, { createdById: "u1", source: { not: "recurring" } });
   assert.equal("userId" in where, false);
   assert.deepEqual(orderBy, { createdAt: "desc" });
+});
+
+test("sin reply, el respaldo excluye las filas materializadas (source: recurring)", async () => {
+  // Una fila materializada no la "registro" nadie: la creo una lectura del
+  // mes. Sin este filtro, abrir el dashboard el primero de mes pondria una
+  // fila de alquiler adelante de la cola del respaldo. Ver el comentario de
+  // `resolveCorrectionTarget`.
+  const { client, llamadas } = clienteFalso({ findFirstResult: GASTO_BASE });
+  await resolveCorrectionTarget(client, "u1", "chat-1", null);
+  const { where } = llamadas.findFirst[0];
+  assert.deepEqual(where.source, { not: "recurring" });
 });
 
 test("sin reply y sin gastos devuelve sin_gastos", async () => {
