@@ -27,7 +27,11 @@ Construido con Next.js 16, Prisma y MongoDB.
 - Exportacion a CSV
 
 Todavía **no** está, aunque el diseño lo contempla: el OCR de comprobantes por
-foto. Ver [docs/features-backlog.md](docs/features-backlog.md).
+foto, y las consultas por el bot ("cuánto gasté este mes en comida" sigue
+contestando que todavía no puede responder preguntas — ver
+`consulta_no_soportada` y `src/lib/queries/` en
+[docs/architecture.md](docs/architecture.md)). Ver
+[docs/features-backlog.md](docs/features-backlog.md).
 
 ## Tech Stack
 
