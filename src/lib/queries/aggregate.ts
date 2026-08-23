@@ -30,10 +30,28 @@ export type ConsultaClient = MaterializeClient & {
   };
 };
 
+/**
+ * `materializacionFallida` es un campo HERMANO de `kind` en las tres variantes,
+ * no un envoltorio `{ answer, materializacionFallida }` alrededor de la union:
+ * asi `formatConsultaAnswer` sigue haciendo `switch`/`if` sobre `answer.kind`
+ * sin desenvolver nada primero, y el campo viaja pegado al resultado que
+ * describe en vez de vivir en una capa aparte que se puede perder al pasar el
+ * valor de mano en mano.
+ *
+ * True si la materializacion de algun mes del rango fallo. El numero que
+ * sigue es correcto para lo que hay en la base, pero puede faltarle los
+ * recurrentes de ese mes — o sea que puede estar CORTO. Callarlo hace que el
+ * bot conteste un total incompleto con la misma cara que uno completo.
+ */
 export type ConsultaAnswer =
-  | { kind: "total"; total: number; cantidad: number }
-  | { kind: "por_categoria"; filas: { categoryName: string; total: number }[]; total: number }
-  | { kind: "tendencia"; meses: { periodo: string; total: number }[] };
+  | { kind: "total"; total: number; cantidad: number; materializacionFallida: boolean }
+  | {
+      kind: "por_categoria";
+      filas: { categoryName: string; total: number }[];
+      total: number;
+      materializacionFallida: boolean;
+    }
+  | { kind: "tendencia"; meses: { periodo: string; total: number }[]; materializacionFallida: boolean };
 
 /** Cada mes calendario tocado por `[from, to]`, inclusive de los dos extremos.
  * `from <= to` esta garantizado por `buildConsulta` (`src/lib/ai/parse.ts`)
@@ -75,7 +93,7 @@ function totalDeCargos(cargos: Charge[]): number {
   return cargos.reduce((s, c) => s + c.amount, 0);
 }
 
-function porCategoria(cargos: Charge[]): ConsultaAnswer {
+function porCategoria(cargos: Charge[], materializacionFallida: boolean): ConsultaAnswer {
   const mapa = new Map<string, number>();
   for (const c of cargos) {
     mapa.set(c.categoryName, (mapa.get(c.categoryName) ?? 0) + c.amount);
@@ -83,7 +101,7 @@ function porCategoria(cargos: Charge[]): ConsultaAnswer {
   const filas = [...mapa.entries()]
     .map(([categoryName, total]) => ({ categoryName, total }))
     .sort((a, b) => b.total - a.total);
-  return { kind: "por_categoria", filas, total: totalDeCargos(cargos) };
+  return { kind: "por_categoria", filas, total: totalDeCargos(cargos), materializacionFallida };
 }
 
 /**
@@ -102,11 +120,15 @@ function porCategoria(cargos: Charge[]): ConsultaAnswer {
  *        cualquier mes fuera de `[PRIMER_PERIODO_MATERIALIZABLE, el mes
  *        actual en Buenos Aires]`. Iterar meses futuros o anteriores al piso
  *        no escribe nada: son no-ops.
- *    No se le pasa un `onError` propio (la firma de esta funcion, a proposito,
- *    no toma uno: ver el reporte de esta tarea): un fallo de materializacion
- *    durante una consulta no aborta la respuesta -- se sirve con lo que ya
- *    este materializado, igual que en `stats/route.ts` -- y el proximo GET
- *    del dashboard (que si loguea) reintenta la misma escritura idempotente.
+ *    Un fallo de materializacion NUNCA aborta la respuesta: se sirve con lo
+ *    que ya este materializado, igual que en `stats/route.ts`, y el proximo
+ *    GET del dashboard reintenta la misma escritura idempotente. Pero el fallo
+ *    tampoco se calla: el `onError` opcional (mismo patron que `learnAlias` y
+ *    `recordAliasHit` en `src/lib/aliases.ts`) deja que el llamador lo loguee,
+ *    y `materializacionFallida` en el resultado (ver `ConsultaAnswer` arriba)
+ *    lo hace visible en la respuesta del bot: sin esto, un fallo permanente de
+ *    materializacion se ve como "el alquiler no esta" sin ningun rastro, para
+ *    siempre, cada vez que alguien pregunte por ese mes.
  * 2. Trae los gastos SIN filtro de fecha, con el predicado de visibilidad
  *    (`visibleExpensesWhere`, armado ACA con `actorId` y `householdUserIds` —
  *    nunca recibido ya armado, para que esta funcion nunca pueda olvidarlo) y
@@ -121,10 +143,13 @@ export async function resolveConsulta(
   client: ConsultaClient,
   query: ConsultaQuery,
   actorId: string,
-  householdUserIds: readonly string[]
+  householdUserIds: readonly string[],
+  onError?: (error: unknown) => void
 ): Promise<ConsultaAnswer> {
+  let materializacionFallida = false;
   for (const { year, month } of mesesDelRango(query.from, query.to)) {
-    await materializeRecurringForMonthSafely(client, year, month, () => {});
+    const { fallo } = await materializeRecurringForMonthSafely(client, year, month, onError ?? (() => {}));
+    if (fallo) materializacionFallida = true;
   }
 
   const where: Record<string, unknown> = { ...visibleExpensesWhere(actorId, householdUserIds) };
@@ -143,24 +168,40 @@ export async function resolveConsulta(
     orderBy: { date: "desc" },
   });
 
+  // Limite EXCLUSIVO superior y limite INCLUSIVO inferior de todo el rango de
+  // la consulta, ya normalizados a medianoche. Los usa "tendencia" de abajo
+  // para recortar el primer y el ultimo mes exactamente igual que los usan
+  // "total" y "por_categoria" mas abajo.
+  const desdeRango = inicioDelDia(query.from);
+  const hastaRango = diaSiguiente(query.to);
+
   if (query.metric === "tendencia") {
     const meses = mesesDelRango(query.from, query.to).map(({ year, month }) => {
-      // Meses CALENDARIO completos, no recortados a `query.from`/`query.to`:
-      // "tendencia" muestra el total de cada mes entero del rango, igual que
-      // `trend12m` en `stats/route.ts`.
-      const desde = new Date(Date.UTC(year, month - 1, 1));
-      const hasta = new Date(Date.UTC(year, month, 1));
+      // Cada mes CALENDARIO se intersecta con `[desdeRango, hastaRango)`: sin
+      // esto, el primer y el ultimo mes de la tendencia ignoraban el recorte a
+      // hoy que "total" y "por_categoria" SI respetan (`buildConsulta`,
+      // `src/lib/ai/parse.ts`, recorta `to` a hoy si vino en el futuro). Con un
+      // gasto cargado a mano con fecha posterior a hoy dentro del mes en curso,
+      // el mismo bot contestaba dos numeros distintos para el mismo mes segun
+      // la metrica, y el encabezado ("Del ... al ...") describia mal a la
+      // tendencia: decia el rango recortado mientras el ultimo mes de la lista
+      // no lo respetaba. Los meses intermedios no cambian: sus limites de
+      // calendario ya caen adentro del rango.
+      const desdeMes = new Date(Date.UTC(year, month - 1, 1));
+      const hastaMes = new Date(Date.UTC(year, month, 1));
+      const desde = desdeMes > desdeRango ? desdeMes : desdeRango;
+      const hasta = hastaMes < hastaRango ? hastaMes : hastaRango;
       const cargosDelMes = expensesToCharges(todos, desde, hasta);
       return { periodo: periodKey(year, month), total: totalDeCargos(cargosDelMes) };
     });
-    return { kind: "tendencia", meses };
+    return { kind: "tendencia", meses, materializacionFallida };
   }
 
-  const cargos = expensesToCharges(todos, inicioDelDia(query.from), diaSiguiente(query.to));
+  const cargos = expensesToCharges(todos, desdeRango, hastaRango);
 
   if (query.metric === "por_categoria") {
-    return porCategoria(cargos);
+    return porCategoria(cargos, materializacionFallida);
   }
 
-  return { kind: "total", total: totalDeCargos(cargos), cantidad: cargos.length };
+  return { kind: "total", total: totalDeCargos(cargos), cantidad: cargos.length, materializacionFallida };
 }
