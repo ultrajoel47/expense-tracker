@@ -15,6 +15,10 @@ Construido con Next.js 16, Prisma y MongoDB.
   de confirmación), o por texto libre ("eso fue personal", "en realidad fueron
   15 lucas") apuntando al gasto por reply o, si no hay reply, al último que
   esa persona registró
+- Aprendizaje de aliases: cuando la pareja corrige la categoría o el ámbito de
+  un gasto, el bot graba la equivalencia sola (sin ningún formulario) y la usa
+  para clasificar mejor la próxima vez que aparezca ese mismo comercio,
+  persona o concepto
 - Autenticacion con JWT en cookie httpOnly, y registro cerrado por allowlist de
   emails (`HOUSEHOLD_EMAILS`)
 - CRUD de gastos con categorias, tarjetas de crédito y cuotas

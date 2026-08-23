@@ -109,11 +109,24 @@ plantilla en sí no entra en ningún total.
 
 Aprendizaje de categorización. Un `pattern` normalizado (minúsculas, sin
 acentos) que mapea a una categoría, y opcionalmente a una descripción linda y a
-un `scope`.
+un `scope`. Lo escribe y lo lee `src/lib/aliases.ts`.
 
 - `scope` acá es **nullable**: un alias puede no forzar el ámbito.
 - `hits` cuenta los usos, para poder ordenar y para inyectar los más frecuentes
   en el prompt de la IA.
+- **`pattern` es la clave natural del `upsert` con el que se aprende un
+  alias.** No hay un id de negocio separado: la fila SE IDENTIFICA por su
+  patrón, así que la corrección siguiente sobre el mismo patrón actualiza la
+  misma fila (pisa `categoryId` y, si tocó el ámbito, `scope`) en vez de crear
+  una segunda. Es lo que hace que un alias aprendido de una corrección
+  equivocada no quede mal para siempre: la próxima corrección sobre esa misma
+  descripción lo reemplaza.
+- **`hits` es una heurística ordenadora, no un dato del dominio.** Nadie puede
+  saber si la IA usó de verdad un alias para clasificar un gasto —el prompt lo
+  ofrece como contexto, pero la decisión es de la IA—, así que `hits` cuenta
+  una señal indirecta (el gasto quedó con la descripción de un alias Y con la
+  categoría que ese alias predice). Sirve para decidir qué aliases sobreviven
+  al tope que se inyecta en el prompt, no para ningún cálculo del negocio.
 
 ## ProcessedUpdate
 

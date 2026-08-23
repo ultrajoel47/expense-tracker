@@ -49,6 +49,7 @@ src/
 │   ├── household.ts             # Allowlist de emails → ids de los miembros
 │   ├── idempotency.ts           # claimUpdate() del webhook: el update_id se reclama antes de procesar
 │   ├── recurring-materialize.ts # Crea el Expense del período al materializar una plantilla recurrente
+│   ├── aliases.ts               # Aprende equivalencias de las correcciones (ver debajo)
 │   ├── expenses/                # installments.ts, charges.ts (expensesToCharges), create-from-bot.ts, correct.ts
 │   ├── telegram/                # Cliente del bot y normalización de updates
 │   ├── ai/                      # AiProvider, parseMessage y el prompt
@@ -174,6 +175,35 @@ una rama en `getAiProvider()`, sin tocar `parse.ts` ni los tests.
 Este seam existe por el hosting: en Vercel Hobby no hay binario nativo, en el VPS
 sí y es mucho más rápido. El texto extraído se concatena al mensaje y sigue por
 el mismo pipeline que un gasto escrito.
+
+### `src/lib/aliases.ts` — el bot aprende de las correcciones
+
+Módulo puro con cliente inyectado (mismo patrón que `correct.ts` e
+`idempotency.ts`). Implementa la sección 8 del
+[diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md): cuando la
+pareja corrige la categoría o el ámbito de un gasto, el sistema graba solo la
+equivalencia — nadie llena un formulario de aliases.
+
+- **El patrón sale de la `description` del gasto, no del texto del mensaje.**
+  La IA ya extrae ahí "el comercio, persona o concepto, corto" — la misma
+  granularidad que un alias necesita. De "transferí 12 lucas a Juan Pérez" la
+  descripción es "Juan Pérez", y ese es el patrón que se aprende, no la frase
+  entera.
+- Se aprende solo cuando la corrección cambió la categoría o el ámbito:
+  corregir un monto o una fecha no enseña "qué es" un gasto.
+- Los aliases inyectados en el prompt (`buildSystemPrompt` en
+  `src/lib/ai/parse.ts`, sección "Equivalencias ya conocidas") están acotados a
+  un tope (`TOPE_PARA_EL_PROMPT`): la tabla crece sin techo con cada
+  corrección, pero el prompt tiene un tamaño finito, y sin el límite las
+  equivalencias viejas terminan empujando afuera a las instrucciones. Se
+  ordenan por `hits` (usos) descendente, así que lo que sobrevive es lo que de
+  verdad se usa.
+- El webhook cablea las tres puntas: carga los aliases para el prompt en
+  `handleTextMessage`, aprende después de cada corrección (por texto libre y
+  por los botones de ámbito/categoría), y cuenta un acierto después de crear
+  un gasto. Las tres van con su propio manejo de errores: un alias es una
+  mejora del prompt, nunca puede convertir un gasto o una corrección ya
+  aplicados en un mensaje de error.
 
 ## Reglas transversales
 
