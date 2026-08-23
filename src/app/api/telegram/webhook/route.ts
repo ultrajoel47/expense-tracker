@@ -14,16 +14,17 @@ import { FALLBACK_CATEGORY, parseMessage } from "@/lib/ai/parse";
 import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
 import type { GastoResult, CorreccionPatch } from "@/lib/ai/types";
-import { buildConfirmation, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
+import { buildConfirmation, describeChanges, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
 import {
   resolveCorrectionTarget,
   applyCorrection,
   deleteExpenseWithInstallments,
+  type CorrectableExpense,
   type CorrectedExpense,
 } from "@/lib/expenses/correct";
 import { getHouseholdUserIds } from "@/lib/household";
 import { buildInstallments } from "@/lib/expenses/installments";
-import { visibleExpensesWhere, canEditViaBot } from "@/lib/visibility";
+import { canEditViaBot } from "@/lib/visibility";
 
 const OK = () => NextResponse.json({ ok: true });
 const UNAUTHORIZED = () => NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -193,7 +194,13 @@ async function applyTextCorrection(
     await sendMessage(
       intake.chatId,
       target.reason === "reply_desconocido"
-        ? "No encuentro el gasto de ese mensaje. Proba respondiendo a una confirmacion mia, o cargalo de nuevo."
+        ? // El puntero (botChatId/botMessageId) se mueve al mensaje nuevo
+          // despues de cada correccion. Si la persona responde al mensaje
+          // VIEJO, el gasto puede existir perfectamente — lo unico que paso es
+          // que el puntero ya no apunta ahi. "No encuentro el gasto" sugeria
+          // que se habia perdido algo, cuando lo que hay que hacer es
+          // responder a la confirmacion mas reciente.
+          "No encuentro el gasto de ese mensaje. Si ya lo corregiste, responde a mi ultima confirmacion de ese gasto."
         : "Todavia no cargaste ningun gasto, asi que no tengo nada que corregir."
     );
     return null;
@@ -216,7 +223,7 @@ async function applyTextCorrection(
     amount: corrected.amount,
     scope: corrected.scope,
     confirmation: await buildCorrectedConfirmation(
-      expense.id,
+      expense,
       expense.userId,
       corrected,
       categories,
@@ -232,14 +239,20 @@ async function applyTextCorrection(
  * `CorrectableExpense` no la declara, y omitirla del mensaje diria que el gasto
  * no tiene tarjeta cuando si la tiene — justo el dato que decide si entra en la
  * deuda de tarjetas del dashboard.
+ *
+ * Recibe el estado `antes` (el `CorrectableExpense` de ANTES de aplicar el
+ * patch) para armar `cambios` con `describeChanges`. Ver el comentario de esa
+ * funcion: es la unica forma en que una correccion aplicada al gasto
+ * equivocado se puede ver y desarmar a mano.
  */
 async function buildCorrectedConfirmation(
-  expenseId: string,
+  antes: CorrectableExpense,
   payerId: string,
   corrected: CorrectedExpense,
   categories: { id: string; name: string }[],
   members: { id: string; name: string }[]
 ): Promise<string> {
+  const expenseId = antes.id;
   const [average, cardRow] = await Promise.all([
     prisma.expense.aggregate({
       where: { categoryId: corrected.categoryId },
@@ -251,13 +264,32 @@ async function buildCorrectedConfirmation(
     }),
   ]);
 
+  const nombreCategoria = (id: string) => categories.find((c) => c.id === id)?.name ?? "-";
+  const cambios = describeChanges(
+    {
+      amount: antes.amount,
+      description: antes.description,
+      date: antes.date,
+      scope: antes.scope,
+      categoryName: nombreCategoria(antes.categoryId),
+    },
+    {
+      amount: corrected.amount,
+      description: corrected.description,
+      date: corrected.date,
+      scope: corrected.scope,
+      categoryName: nombreCategoria(corrected.categoryId),
+    }
+  );
+
   return buildConfirmation({
     amount: corrected.amount,
     description: corrected.description,
-    categoryName: categories.find((c) => c.id === corrected.categoryId)?.name ?? "-",
+    categoryName: nombreCategoria(corrected.categoryId),
     scope: corrected.scope,
     payerName: members.find((m) => m.id === payerId)?.name ?? "-",
     date: corrected.date,
+    cambios,
     anomalous: isAnomalous(corrected.amount, average._avg.amount),
     cardName: cardRow?.creditCard?.name ?? null,
     corregido: true,
@@ -398,6 +430,12 @@ async function handleCallback(
   // string aparte es lo unico que el catch necesita nombrar.
   let expenseIdParaLog: string | undefined;
 
+  // Los case de scope, category y deleteConfirm escriben ANTES de reescribir el
+  // mensaje. Si falla el `edit*`, el cambio YA esta en la base: decirle a la
+  // persona "no pude aplicar el cambio" seria mentirle, y en el caso del
+  // borrado seria mentirle sobre algo irreversible. Se marca antes de escribir.
+  let yaEscribio = false;
+
   try {
     // Un dato invalido no puede llegar a Prisma: un ObjectId mal formado hace
     // tirar a `findFirst`, y eso es un camino de error entero por nada.
@@ -408,17 +446,24 @@ async function handleCallback(
     }
     expenseIdParaLog = action.expenseId;
 
-    // Dos capas de permiso, y las dos hacen falta: el `callback_data` viaja
-    // por el cliente, asi que un miembro podria fabricar un tap con el id de
-    // un gasto personal del otro. La regla de visibilidad en la consulta es
-    // la misma que exige `tests/read-paths.test.ts` de toda lectura de
-    // gastos; `canEditViaBot` (mas abajo) es mas estricta todavia — hace
-    // falta haberlo pagado o cargado, no solo poder verlo.
+    // La puerta de la edicion por bot es `canEditViaBot`, y es la UNICA: haber
+    // pagado el gasto o haberlo cargado. Deliberadamente NO se filtra tambien
+    // por `visibleExpensesWhere`.
+    //
+    // Poner la regla de lectura como precondicion de la edicion cancela la
+    // Regla de Dominio 5 en el caso exacto que la motiva: un gasto personal
+    // del OTRO que yo cargue (Leandro manda "vir se compro unas zapatillas")
+    // no pasa el filtro de visibilidad de Leandro, asi que su propia
+    // confirmacion le contestaria "ese gasto ya no existe" sobre un gasto que
+    // el acaba de cargar — y que si puede corregir respondiendole por texto,
+    // porque ese camino no filtra por visibilidad. El mismo mensaje se
+    // comportaria distinto segun se toque un boton o se le conteste.
+    //
+    // Y no se pierde nada de seguridad: `canEditViaBot` es ESTRICTAMENTE mas
+    // fuerte que la visibilidad para un tap fabricado. Un gasto personal del
+    // otro, pagado y cargado por el otro, falla sus dos condiciones.
     const expense = await prisma.expense.findFirst({
-      where: {
-        id: action.expenseId,
-        ...visibleExpensesWhere(user.id, householdUserIds),
-      },
+      where: { id: action.expenseId },
     });
     if (!expense) {
       await acusar("Ese gasto ya no existe.");
@@ -479,10 +524,11 @@ async function handleCallback(
       }
 
       case "scope": {
+        yaEscribio = true;
         const corrected = await applyCorrection(prisma, expense, { scope: action.scope }, categories);
         if (intake.callbackMessageId) {
           const confirmation = await buildCorrectedConfirmation(
-            expense.id,
+            expense,
             expense.userId,
             corrected,
             categories,
@@ -508,6 +554,7 @@ async function handleCallback(
           break;
         }
 
+        yaEscribio = true;
         const corrected = await applyCorrection(
           prisma,
           expense,
@@ -516,7 +563,7 @@ async function handleCallback(
         );
         if (intake.callbackMessageId) {
           const confirmation = await buildCorrectedConfirmation(
-            expense.id,
+            expense,
             expense.userId,
             corrected,
             categories,
@@ -534,6 +581,7 @@ async function handleCallback(
       }
 
       case "deleteConfirm": {
+        yaEscribio = true;
         await deleteExpenseWithInstallments(prisma, action.expenseId);
         // Sin teclado: un teclado sobre un gasto inexistente solo puede dar
         // errores.
@@ -550,11 +598,22 @@ async function handleCallback(
     }
   } catch (error) {
     console.error(
-      `Error procesando el callback expenseId=${expenseIdParaLog} chatId=${intake.chatId}`,
+      yaEscribio
+        ? `CAMBIO APLICADO SIN CONFIRMAR: expenseId=${expenseIdParaLog} ` +
+            `chatId=${intake.chatId} — la escritura en la base pudo haberse ` +
+            "aplicado y fallo lo que viene despues (reescribir el mensaje o " +
+            "acusar el callback). El mensaje del chat puede estar mostrando el " +
+            "estado viejo."
+        : `Error procesando el callback expenseId=${expenseIdParaLog} chatId=${intake.chatId} — ` +
+            "no se escribio nada.",
       error
     );
     try {
-      await acusar("No pude aplicar el cambio por un error de mi lado.");
+      await acusar(
+        yaEscribio
+          ? "El cambio se aplico, pero no pude actualizar el mensaje. Mira el dashboard."
+          : "No pude aplicar el cambio por un error de mi lado."
+      );
     } catch (avisoError) {
       // El catch del acuse va aparte y solo loguea: si falla el acuse no
       // queda nada mejor que hacer.
@@ -656,7 +715,15 @@ export async function POST(req: Request) {
     // Un tap de boton. Se maneja entero aca adentro y no sigue al flujo de
     // texto: un callback no tiene texto que parsear, y el mensaje de error de
     // la Region 2 ("reenviame el mensaje") no tiene sentido para un boton.
-    if (intake.callbackData) {
+    //
+    // `!== null`, no truthiness: un `callback_data` de string vacio (nuestros
+    // teclados nunca lo mandan, pero un update fabricado si podria) es un
+    // callback igual, y con truthiness caia al camino de texto — "Por ahora
+    // solo entiendo texto" sobre un boton que se queda girando. `""` sigue
+    // siendo un callback: `parseCallbackData` lo procesa (devuelve `null`
+    // porque no matchea ningun formato conocido) y el camino de abajo contesta
+    // "No entiendo ese boton", que es lo honesto.
+    if (intake.callbackData !== null) {
       await handleCallback(intake, user, householdUserIds);
       return OK();
     }

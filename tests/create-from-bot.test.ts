@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildConfirmation, isAnomalous, resolveCard } from "../src/lib/expenses/create-from-bot.ts";
+import {
+  buildConfirmation,
+  describeChanges,
+  isAnomalous,
+  resolveCard,
+} from "../src/lib/expenses/create-from-bot.ts";
 
 const BASE = {
   amount: 12000,
@@ -132,4 +137,92 @@ test("la confirmacion AVISA cuando la tarjeta que dijo no matcheo ninguna", () =
 test("un gasto sin tarjeta no menciona tarjetas", () => {
   const text = buildConfirmation(BASE);
   assert.doesNotMatch(text, /tarjeta/i);
+});
+
+// ─── describeChanges ────────────────────────────────────────────────────────
+
+const ANTES = {
+  amount: 12000,
+  description: "Panaderia",
+  date: new Date("2026-08-10T12:00:00Z"),
+  scope: "casa",
+  categoryName: "Comida y delivery",
+};
+
+test("describeChanges: un solo campo cambiado devuelve una sola linea", () => {
+  const lines = describeChanges(ANTES, { ...ANTES, amount: 15000 });
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^monto:/);
+});
+
+test("describeChanges: varios campos cambiados devuelven varias lineas en orden estable", () => {
+  const lines = describeChanges(ANTES, {
+    ...ANTES,
+    amount: 15000,
+    scope: "personal",
+    categoryName: "Ropa",
+  });
+  assert.deepEqual(
+    lines.map((l) => l.split(":")[0]),
+    ["monto", "ambito", "categoria"]
+  );
+});
+
+test("describeChanges: ningun campo cambiado devuelve []", () => {
+  assert.deepEqual(describeChanges(ANTES, { ...ANTES }), []);
+});
+
+test("describeChanges: el monto sale formateado", () => {
+  const lines = describeChanges(ANTES, { ...ANTES, amount: 15000 });
+  assert.match(lines[0], /\$\s?12\.000/);
+  assert.match(lines[0], /\$\s?15\.000/);
+  assert.match(lines[0], /→/);
+});
+
+test("describeChanges: la fecha cambiada muestra el mismo formato dd/MM que buildConfirmation", () => {
+  const lines = describeChanges(ANTES, { ...ANTES, date: new Date("2026-08-15T12:00:00Z") });
+  assert.equal(lines.length, 1);
+  // El formato exacto (con o sin cero de relleno en el mes) depende de los
+  // datos ICU del runtime; lo que importa es que sea EL MISMO que usa
+  // `buildConfirmation` para el dia 10 y el 15 de agosto, y en ese orden.
+  const fechaEnConfirmacion = (d: Date) => {
+    const texto = buildConfirmation({ ...BASE, date: d });
+    return texto.split("\n")[1].split(" · ")[3];
+  };
+  assert.equal(lines[0], `fecha: ${fechaEnConfirmacion(ANTES.date)} → ${fechaEnConfirmacion(new Date("2026-08-15T12:00:00Z"))}`);
+});
+
+test("describeChanges: la misma fecha con otra hora NO cuenta como cambio", () => {
+  // La confirmacion habla de dias (dd/MM); un cambio de hora que no se ve en
+  // el texto mostrado confundiria mas de lo que aclara.
+  const lines = describeChanges(ANTES, {
+    ...ANTES,
+    date: new Date("2026-08-10T23:00:00Z"),
+  });
+  assert.deepEqual(lines, []);
+});
+
+test("describeChanges: descripcion cambiada", () => {
+  const lines = describeChanges(ANTES, { ...ANTES, description: "Kiosco" });
+  assert.deepEqual(lines, ["descripcion: Panaderia → Kiosco"]);
+});
+
+// ─── `cambios` en buildConfirmation ─────────────────────────────────────────
+
+test("buildConfirmation con cambios los renderiza arriba de las advertencias", () => {
+  const text = buildConfirmation({
+    ...BASE,
+    anomalous: true,
+    cambios: ["monto: $12.000 → $15.000"],
+  });
+  const posCambio = text.indexOf("↺ monto: $12.000 → $15.000");
+  const posAdvertencia = text.indexOf("revisa que este bien");
+  assert.ok(posCambio >= 0, "el cambio no aparecio en el texto");
+  assert.ok(posAdvertencia >= 0, "la advertencia no aparecio en el texto");
+  assert.ok(posCambio < posAdvertencia, "el cambio deberia ir antes que la advertencia");
+});
+
+test("buildConfirmation sin cambios no agrega ninguna linea de mas", () => {
+  const text = buildConfirmation(BASE);
+  assert.doesNotMatch(text, /↺/);
 });

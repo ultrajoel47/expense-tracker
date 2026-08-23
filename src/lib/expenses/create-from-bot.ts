@@ -72,6 +72,64 @@ export function resolveCard<T extends { id: string; name: string }>(
   );
 }
 
+/** El mismo formato `dd/MM` (zona horaria de Buenos Aires) que usa
+ * `buildConfirmation`, extraido para que `describeChanges` no duplique el
+ * `Intl.DateTimeFormat`. */
+function formatFechaCorta(date: Date): string {
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
+/**
+ * Los campos que cambiaron, como "antes → despues", para la confirmacion de una
+ * correccion.
+ *
+ * Existe porque una correccion es la unica operacion DESTRUCTIVA que el bot
+ * hace sin pedir confirmacion: pisa un valor y el anterior no queda en ningun
+ * lado (no hay historial ni auditoria), y el teclado solo puede revertir ambito
+ * y categoria. Mostrar el valor viejo no previene el error, pero lo deja
+ * escrito en el chat: con eso, una correccion aplicada al gasto equivocado se
+ * ve y se puede desarmar a mano.
+ */
+export function describeChanges(
+  antes: { amount: number; description: string; date: Date; scope: string; categoryName: string },
+  despues: { amount: number; description: string; date: Date; scope: string; categoryName: string }
+): string[] {
+  const lines: string[] = [];
+
+  if (antes.amount !== despues.amount) {
+    lines.push(`monto: ${formatArs(antes.amount)} → ${formatArs(despues.amount)}`);
+  }
+
+  if (antes.description !== despues.description) {
+    lines.push(`descripcion: ${antes.description} → ${despues.description}`);
+  }
+
+  if (antes.date.getTime() !== despues.date.getTime()) {
+    const fechaAntes = formatFechaCorta(antes.date);
+    const fechaDespues = formatFechaCorta(despues.date);
+    // Mismo dia, distinta hora: la confirmacion habla de dias (dd/MM), asi
+    // que mostrar un "cambio" que no se ve en el texto confundiria mas de lo
+    // que aclara.
+    if (fechaAntes !== fechaDespues) {
+      lines.push(`fecha: ${fechaAntes} → ${fechaDespues}`);
+    }
+  }
+
+  if (antes.scope !== despues.scope) {
+    lines.push(`ambito: ${antes.scope} → ${despues.scope}`);
+  }
+
+  if (antes.categoryName !== despues.categoryName) {
+    lines.push(`categoria: ${antes.categoryName} → ${despues.categoryName}`);
+  }
+
+  return lines;
+}
+
 export function buildConfirmation(e: {
   amount: number;
   description: string;
@@ -96,18 +154,23 @@ export function buildConfirmation(e: {
    * estaba" no pueden verse igual.
    */
   corregido?: boolean;
+  /**
+   * Los cambios de una correccion, como "antes → despues". Se renderizan
+   * debajo de las dos lineas del gasto. Ver `describeChanges`.
+   */
+  cambios?: string[];
 }): string {
-  const fecha = new Intl.DateTimeFormat("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    day: "2-digit",
-    month: "2-digit",
-  }).format(e.date);
+  const fecha = formatFechaCorta(e.date);
 
   const lines = [
     `${e.corregido ? "✏" : "✓"} <b>${formatArs(e.amount)}</b> · ${e.description}`,
     `${e.categoryName} · ${e.scope} · pago ${e.payerName} · ${fecha}` +
       (e.cardName ? ` · ${e.cardName}` : ""),
   ];
+
+  if (e.cambios?.length) {
+    for (const cambio of e.cambios) lines.push(`↺ ${cambio}`);
+  }
 
   if (e.unmatchedCardName) {
     lines.push(
