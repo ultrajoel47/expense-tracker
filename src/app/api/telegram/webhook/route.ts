@@ -4,6 +4,10 @@ import { requireEnv } from "@/lib/env";
 import { toIntake } from "@/lib/telegram/intake";
 import { claimUpdate, isDuplicateKeyError } from "@/lib/idempotency";
 import { sendMessage } from "@/lib/telegram/client";
+import { parseMessage } from "@/lib/ai/parse";
+import { getAiProvider } from "@/lib/ai/provider";
+import { todayInBuenosAires } from "@/lib/ai/normalize";
+import { buildConfirmation, isAnomalous } from "@/lib/expenses/create-from-bot";
 
 /** Telegram reintenta ante cualquier respuesta que no sea 200. Siempre 200. */
 const OK = () => NextResponse.json({ ok: true });
@@ -75,7 +79,89 @@ export async function POST(req: Request) {
     });
     if (!user) return OK();
 
-    await sendMessage(intake.chatId, "Te escucho. (el parser llega en la tarea 10)");
+    if (!intake.text) {
+      await sendMessage(intake.chatId, "Por ahora solo entiendo texto. Las fotos llegan pronto.");
+      return OK();
+    }
+
+    const [categories, members] = await Promise.all([
+      prisma.category.findMany({ select: { id: true, name: true } }),
+      prisma.user.findMany({ select: { id: true, name: true } }),
+    ]);
+
+    const parsed = await parseMessage(
+      intake.text,
+      {
+        categories: categories.map((c) => c.name),
+        members,
+        senderId: user.id,
+        today: todayInBuenosAires(new Date()),
+        aliases: [],
+      },
+      getAiProvider()
+    );
+
+    if (parsed.intent !== "gasto") {
+      await sendMessage(intake.chatId, `No lo pude registrar: ${parsed.reason}`);
+      return OK();
+    }
+
+    const category = categories.find((c) => c.name === parsed.categoryName)!;
+    const payer =
+      (parsed.payerName &&
+        members.find((m) => m.name.toLowerCase() === parsed.payerName!.toLowerCase())) ||
+      user;
+
+    const average = await prisma.expense.aggregate({
+      where: { categoryId: category.id },
+      _avg: { amount: true },
+    });
+
+    const expense = await prisma.expense.create({
+      data: {
+        amount: parsed.amount,
+        description: parsed.description,
+        date: parsed.date,
+        categoryId: category.id,
+        userId: payer.id,
+        createdById: user.id,
+        scope: parsed.scope,
+        source: "bot",
+        totalInstallments: parsed.installments,
+        installments: parsed.installments
+          ? {
+              create: Array.from({ length: parsed.installments }, (_, i) => {
+                const due = new Date(parsed.date);
+                due.setMonth(due.getMonth() + i);
+                return {
+                  installmentNumber: i + 1,
+                  dueDate: due,
+                  amount: parsed.amount / parsed.installments!,
+                };
+              }),
+            }
+          : undefined,
+      },
+    });
+
+    const sent = await sendMessage(
+      intake.chatId,
+      buildConfirmation({
+        amount: parsed.amount,
+        description: parsed.description,
+        categoryName: parsed.categoryName,
+        scope: parsed.scope,
+        payerName: payer.name,
+        date: parsed.date,
+        anomalous: isAnomalous(parsed.amount, average._avg.amount),
+      })
+    );
+
+    await prisma.expense.update({
+      where: { id: expense.id },
+      data: { botChatId: intake.chatId, botMessageId: String(sent.message_id) },
+    });
+
     return OK();
   } catch (error) {
     console.error("Error procesando update de Telegram", error);
