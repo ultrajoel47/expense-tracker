@@ -55,6 +55,7 @@ export async function POST(req: Request) {
       frequency,
       dayOfMonth: dayOfMonth ? Number(dayOfMonth) : null,
       nextDue: new Date(nextDue),
+      scope: body.scope === "personal" ? "personal" : "casa",
     },
     include: {
       category: { select: { id: true, name: true, color: true } },

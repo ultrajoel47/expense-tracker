@@ -29,6 +29,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       dayOfMonth: body.dayOfMonth !== undefined ? Number(body.dayOfMonth) || null : undefined,
       nextDue: body.nextDue ? new Date(body.nextDue) : undefined,
       active: body.active !== undefined ? Boolean(body.active) : undefined,
+      scope: body.scope === undefined ? undefined : body.scope === "personal" ? "personal" : "casa",
     },
     include: {
       category: { select: { id: true, name: true, color: true } },

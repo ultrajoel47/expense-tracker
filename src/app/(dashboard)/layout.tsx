@@ -33,6 +33,15 @@ const primaryNavItems = [
       </svg>
     ),
   },
+  {
+    href: "/dashboard/recurring",
+    label: "Recurrentes",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0114-4.9M20 15a8 8 0 01-14 4.9" />
+      </svg>
+    ),
+  },
 ];
 
 const secondaryNavItems = [
