@@ -14,6 +14,7 @@ import { FALLBACK_CATEGORY, parseMessage } from "@/lib/ai/parse";
 import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
 import type { GastoResult, CorreccionPatch } from "@/lib/ai/types";
+import { loadAliasesForPrompt, learnAlias, recordAliasHit } from "@/lib/aliases";
 import { buildConfirmation, describeChanges, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
 import {
   resolveCorrectionTarget,
@@ -131,6 +132,24 @@ async function handleTextMessage(
     }),
   ]);
 
+  // `loadAliasesForPrompt` necesita las categorias para resolver el nombre,
+  // asi que va DESPUES del Promise.all de arriba, no adentro: no hay forma de
+  // pasarle un resultado que todavia no se resolvio. Con su propio try/catch
+  // en vez de un `.catch(() => [])` colgado del Promise.all porque no es una
+  // promesa mas de ese `Promise.all` — corre despues, secuencial. Un alias es
+  // una mejora del prompt, no un requisito: si esto falla, el gasto se sigue
+  // registrando con `aliases: []`, exactamente como antes de esta rebanada.
+  let aliases: Awaited<ReturnType<typeof loadAliasesForPrompt>> = [];
+  try {
+    aliases = await loadAliasesForPrompt(prisma, categories);
+  } catch (error) {
+    console.error(
+      "No se pudieron cargar los aliases para el prompt: el gasto se registra igual, " +
+        "sin equivalencias aprendidas.",
+      error
+    );
+  }
+
   const parsed = await parseMessage(
     intake.text,
     {
@@ -138,7 +157,7 @@ async function handleTextMessage(
       members,
       senderId: user.id,
       today: todayInBuenosAires(new Date()),
-      aliases: [],
+      aliases,
     },
     getAiProvider()
   );
@@ -217,6 +236,27 @@ async function applyTextCorrection(
   }
 
   const corrected = await applyCorrection(prisma, expense, patch, categories);
+
+  // El aprendizaje de alias corre DESPUES de la escritura de la correccion y
+  // nunca puede hacerla fallar: `learnAlias` ya no tira (ver su comentario),
+  // pero el `onError` queda igual para dejar constancia de que lo unico que
+  // se perdio es la equivalencia, no la correccion — que ya esta aplicada.
+  await learnAlias(
+    prisma,
+    {
+      description: corrected.description,
+      categoryId: corrected.categoryId,
+      scope: corrected.scope,
+      cambioLaCategoria: corrected.categoryId !== expense.categoryId,
+      cambioElAmbito: corrected.scope !== expense.scope,
+    },
+    (error) =>
+      console.error(
+        `No se pudo aprender el alias de la correccion de expenseId=${expense.id}: la ` +
+          "correccion SI se aplico, solo se perdio la equivalencia para el prompt.",
+        error
+      )
+  );
 
   return {
     expenseId: expense.id,
@@ -390,6 +430,18 @@ async function registerExpense(
     },
   });
 
+  // Telemetria del alias que predijo este gasto, si hubo uno: corre DESPUES
+  // de que el gasto ya existe (Region 3) y con su propio onError, porque
+  // `recordAliasHit` nunca tira pero esto sigue siendo una mejora, no un
+  // requisito del registro. Ver el comentario de `recordAliasHit`.
+  await recordAliasHit(prisma, parsed.description, category.id, (error) =>
+    console.error(
+      `No se pudo contar el acierto de alias de expenseId=${expense.id}: el gasto SI se ` +
+        "registro, solo se perdio esta telemetria.",
+      error
+    )
+  );
+
   return {
     expenseId: expense.id,
     amount: parsed.amount,
@@ -526,6 +578,27 @@ async function handleCallback(
       case "scope": {
         yaEscribio = true;
         const corrected = await applyCorrection(prisma, expense, { scope: action.scope }, categories);
+        // Corre DESPUES de la escritura, con su propio onError: ver el
+        // comentario del mismo llamado en `applyTextCorrection`. No se
+        // hardcodea "solo cambio el ambito": se compara contra `expense`
+        // (el estado de ANTES) para que siga siendo correcto si este boton
+        // algun dia tambien tocara la categoria.
+        await learnAlias(
+          prisma,
+          {
+            description: corrected.description,
+            categoryId: corrected.categoryId,
+            scope: corrected.scope,
+            cambioLaCategoria: corrected.categoryId !== expense.categoryId,
+            cambioElAmbito: corrected.scope !== expense.scope,
+          },
+          (error) =>
+            console.error(
+              `No se pudo aprender el alias del boton de ambito de expenseId=${expense.id}: ` +
+                "el cambio SI se aplico, solo se perdio la equivalencia para el prompt.",
+              error
+            )
+        );
         if (intake.callbackMessageId) {
           const confirmation = await buildCorrectedConfirmation(
             expense,
@@ -560,6 +633,26 @@ async function handleCallback(
           expense,
           { categoryName: category.name },
           categories
+        );
+        // Mismo patron que el case "scope" de arriba: se compara contra el
+        // estado de ANTES en vez de asumir "solo cambio la categoria", para
+        // que siga siendo correcto si este boton algun dia tambien tocara
+        // el ambito.
+        await learnAlias(
+          prisma,
+          {
+            description: corrected.description,
+            categoryId: corrected.categoryId,
+            scope: corrected.scope,
+            cambioLaCategoria: corrected.categoryId !== expense.categoryId,
+            cambioElAmbito: corrected.scope !== expense.scope,
+          },
+          (error) =>
+            console.error(
+              `No se pudo aprender el alias del boton de categoria de expenseId=${expense.id}: ` +
+                "el cambio SI se aplico, solo se perdio la equivalencia para el prompt.",
+              error
+            )
         );
         if (intake.callbackMessageId) {
           const confirmation = await buildCorrectedConfirmation(
