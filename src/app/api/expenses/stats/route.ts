@@ -25,7 +25,20 @@ export async function GET(req: Request) {
   // porque el free tier de Vercel los limita y el VPS usaria otro mecanismo.
   // El modulo acota el rango de meses materializables; ver
   // PRIMER_PERIODO_MATERIALIZABLE.
-  await materializeRecurringForMonth(prisma as never, year, month);
+  // La materializacion NO puede tumbar la lectura. Es idempotente y se
+  // reintenta en el request siguiente, asi que ante un fallo transitorio
+  // (failover del replica set, corte de conexion, P2028 por timeout de
+  // transaccion en un cold start de Vercel: son 10 transacciones seguidas por
+  // cada carga) un 500 no arregla nada y se lleva la pagina puesta. El modulo
+  // relanza a proposito todo lo que no sea P2002 — a SU nivel confundir un
+  // fallo transitorio con "ya existe" haria que el alquiler dejara de aparecer
+  // en silencio — pero a nivel de la ruta la balanza se invierte: se sirve la
+  // lectura con lo que ya este materializado y el proximo request lo cura.
+  try {
+    await materializeRecurringForMonth(prisma as never, year, month);
+  } catch (error) {
+    console.error("[stats] fallo la materializacion de recurrentes, se sirve la lectura igual", error);
+  }
 
   const startDate = new Date(Date.UTC(year, month - 1, 1));
   const endDate = new Date(Date.UTC(year, month, 1));
