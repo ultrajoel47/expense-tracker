@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   materializeRecurringForMonth,
+  materializeRecurringForMonthSafely,
   periodKey,
   esPeriodoMaterializable,
   PRIMER_PERIODO_MATERIALIZABLE,
@@ -284,4 +285,51 @@ test("materializeRecurringForMonth filtra por FRECUENCIAS_MATERIALIZABLES, no po
   await materializeRecurringForMonth(client as any, 2026, 8);
 
   assert.deepEqual(whereRecibido.frequency, { in: [...FRECUENCIAS_MATERIALIZABLES] });
+});
+
+// ─── materializeRecurringForMonthSafely: el try/catch de los call sites, ────
+// ─── ahora testeable en vez de verificado solo por inspeccion ──────────────
+
+test("materializeRecurringForMonthSafely: si materializa bien, devuelve fallo:false y no llama a onError", async () => {
+  const { client } = clienteFalso([ALQUILER]);
+  let onErrorLlamado = false;
+
+  const resultado = await materializeRecurringForMonthSafely(
+    client as any,
+    2026,
+    8,
+    () => { onErrorLlamado = true; }
+  );
+
+  assert.deepEqual(resultado, { creados: 1, fallo: false });
+  assert.equal(onErrorLlamado, false);
+});
+
+test("materializeRecurringForMonthSafely: si materializeRecurringForMonth tira, absorbe el error, avisa por onError y devuelve fallo:true", async () => {
+  const client = {
+    recurringExpense: { findMany: async () => [ALQUILER] },
+    $transaction: async () => {
+      throw new Error("conexion caida");
+    },
+  };
+  const errores: unknown[] = [];
+
+  const resultado = await materializeRecurringForMonthSafely(
+    client as any,
+    2026,
+    8,
+    (error) => errores.push(error)
+  );
+
+  assert.deepEqual(resultado, { creados: 0, fallo: true });
+  assert.equal(errores.length, 1);
+  assert.match((errores[0] as Error).message, /conexion caida/);
+});
+
+test("materializeRecurringForMonthSafely: un mes fuera de la ventana sigue devolviendo fallo:false (no es un error, es la ventana funcionando)", async () => {
+  const { client } = clienteFalso([ALQUILER]);
+  const resultado = await materializeRecurringForMonthSafely(client as any, 2026, 3, () => {
+    assert.fail("no deberia llamarse onError: no materializar antes del piso no es un fallo");
+  });
+  assert.deepEqual(resultado, { creados: 0, fallo: false });
 });

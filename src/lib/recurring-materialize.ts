@@ -236,3 +236,55 @@ export async function materializeRecurringForMonth(
 
   return creados;
 }
+
+/** Resultado de {@link materializeRecurringForMonthSafely}. */
+export type MaterializeOutcome = {
+  /** Cuantos `Expense` se crearon. `0` tanto si no habia nada que crear como
+   * si la materializacion fallo. */
+  creados: number;
+  /** `true` si `materializeRecurringForMonth` tiro. La lectura igual se
+   * sirve con lo que ya estuviera materializado: ver el comentario de
+   * `materializeRecurringForMonth` sobre por que un fallo transitorio no
+   * puede tumbar la pagina. */
+  fallo: boolean;
+};
+
+/**
+ * Envoltorio de `materializeRecurringForMonth` que absorbe cualquier error y
+ * lo convierte en un resultado inspeccionable, en vez de un `try/catch` que
+ * solo loguea.
+ *
+ * POR QUE EXISTE: antes de esto, los dos call sites (`expenses/route.ts` y
+ * `expenses/stats/route.ts`) repetian el mismo `try { await
+ * materializeRecurringForMonth(...) } catch (error) { console.error(...) }`,
+ * sin ninguna forma de que el resto de la respuesta supiera que la
+ * materializacion habia fallado. Un fallo PERMANENTE (no el transitorio que
+ * el modulo ya tolera con P2002) se veia como el alquiler faltando del total,
+ * en silencio — exactamente el modo de falla que el `rethrow` del modulo
+ * existe para evitar, reintroducido un nivel mas arriba por el `catch` mudo
+ * de la ruta.
+ *
+ * No relanza: seguir sirviendo la lectura con lo que ya este materializado es
+ * la decision correcta (ver el comentario de la ruta), pero ahora el
+ * llamador puede propagar `fallo` hasta la respuesta HTTP y de ahi a un aviso
+ * visible en el dashboard, en vez de que la unica traza quede en un log de
+ * servidor que nadie mira.
+ *
+ * `onError` es un callback (no un logger inyectado por nombre) para que este
+ * modulo siga sin saber nada de `console` ni de ningun otro side-effect
+ * concreto: sigue siendo un modulo puro, testeable sin mockear IO.
+ */
+export async function materializeRecurringForMonthSafely(
+  client: MaterializeClient,
+  year: number,
+  month: number,
+  onError: (error: unknown) => void
+): Promise<MaterializeOutcome> {
+  try {
+    const creados = await materializeRecurringForMonth(client, year, month);
+    return { creados, fallo: false };
+  } catch (error) {
+    onError(error);
+    return { creados: 0, fallo: true };
+  }
+}

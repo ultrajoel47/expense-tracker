@@ -39,6 +39,7 @@ interface Stats {
   totalCreditCardDebt: number;
   upcomingRecurring: UpcomingRecurring[];
   trend12m: { month: string; total: number }[];
+  recurringMaterializationFailed: boolean;
 }
 
 export default function DashboardPage() {
@@ -90,6 +91,19 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Aviso visible cuando la materializacion de recurrentes fallo: sin esto,
+          un fallo permanente se ve como el alquiler faltando del total, en
+          silencio (la unica traza queda en el log del server). */}
+      {stats.recurringMaterializationFailed && (
+        <div className="flex items-start gap-2 text-sm bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+          <span aria-hidden="true">⚠️</span>
+          <p>
+            No se pudieron actualizar los gastos recurrentes de este mes (por ejemplo el alquiler).
+            Los totales de abajo pueden estar incompletos hasta que vuelvas a cargar la pagina.
+          </p>
+        </div>
+      )}
 
       {/* Vinculacion con el bot de Telegram */}
       <TelegramLinkCard />
