@@ -700,3 +700,35 @@ Cada una suma una capacidad sobre una base que ya funciona:
 
 La documentación de la sección 14 se actualiza en la rebanada que la invalida,
 no al final: `CLAUDE.md` y `docs/data-models.md` en la 1, el resto a medida.
+
+---
+
+## Enmienda 1 — Semántica de cuotas (decidida 2026-08-23, Rebanada 3)
+
+La Rebanada 1 dejó las dos rutas de lectura en desacuerdo, y el usuario lo notó
+a los cinco minutos de usar la app: el listado contaba un gasto en cuotas en cada
+mes que vence una cuota, mientras los gráficos lo contaban entero en el mes de la
+compra. El mismo mes daba dos totales distintos, sin forma de reconciliarlos.
+
+**Decisión: semántica de FLUJO en las dos rutas.** Lo que se muestra en un mes es
+lo que efectivamente se paga en ese mes:
+
+- Un gasto sin cuotas cuenta por su monto, en el mes de su `date`.
+- Un gasto en cuotas cuenta por el monto de la cuota, en el mes del `dueDate` de
+  esa cuota — no por su monto total, y no en el mes de la compra.
+
+Razón: es la pregunta que una pareja se hace de verdad ("cuánto estamos pagando
+este mes"), no "cuánto nos comprometimos". Y es la semántica que el listado ya
+usaba, así que alinear los gráficos hacia ella conserva la vista de "qué cuotas
+me vencen" en vez de perderla.
+
+**Consecuencia aceptada:** los gráficos históricos cambian. Los meses con compras
+grandes bajan y los siguientes suben. En marzo 2026, sobre datos reales, el total
+pasa de $2.397.806 a $2.301.704. El usuario aprobó el cambio con esos números a
+la vista.
+
+Alcance: 9 de 386 gastos tienen cuotas, pero son los de mayor monto (televisor
+$309.999 en 6, aspiradora $250.000 en 12, árbol de navidad $160.000 en 3).
+
+Esto reemplaza lo que la sección 10 decía sobre `stats`, y el ítem del backlog
+que se marcaba como completo era falso para una de las dos rutas.
