@@ -44,7 +44,42 @@ const EXPECTED_COUNTS: Record<string, number> = {
   RecurringExpense: 10,
   CreditCard: 6,
   User: 2,
+  Category: 8,
 };
+
+/**
+ * Campos que quedaron en los documentos y que el schema nuevo ya no declara.
+ * Prisma los ignora, pero dejarlos contradice la regla que documenta CLAUDE.md:
+ * si algo habla del dominio viejo, es residuo. Los valores originales estan en
+ * backups/pre-rebanada1-2026-08-22.json por si alguien los necesita.
+ *
+ * Descubiertos con $objectToArray sobre $$ROOT, no asumidos.
+ */
+const DEAD_FIELDS: Record<string, string[]> = {
+  Expense: ["isShared", "splitMode", "groupId"],
+  RecurringExpense: ["isShared", "splitMode", "groupId", "payerId"],
+};
+
+/**
+ * Categorias que sembro la primera version de scripts/seed-categories.ts y que
+ * el usuario decidio no usar: duplicaban su vocabulario real (Supermercado y
+ * "Comida y delivery" al lado de Alimentacion, que tiene 240 de los 386 gastos).
+ *
+ * En la Tarea 8 el prompt de la IA recibe todos los nombres de categoria, asi que
+ * los casi-duplicados desparramarian la categoria mas grande en tres baldes.
+ *
+ * Solo se borran si no las usa NADIE (gastos, recurrentes ni aliases).
+ */
+const UNUSED_SEEDED_CATEGORIES = [
+  "Alquiler",
+  "Comida y delivery",
+  "Farmacia",
+  "Hogar",
+  "Mascotas",
+  "Regalos",
+  "Ropa",
+  "Supermercado",
+];
 
 async function listCollections(): Promise<string[]> {
   const res = (await prisma.$runCommandRaw({ listCollections: 1 })) as {
@@ -179,6 +214,58 @@ async function dropOrphans(collections: string[]) {
   }
 }
 
+/**
+ * Saca los campos del dominio viejo de los documentos. Idempotente: filtra por
+ * `$exists: true`, asi que la segunda corrida no modifica nada.
+ */
+async function cleanDeadFields(collections: string[]) {
+  console.log("\n== LIMPIEZA DE CAMPOS MUERTOS ==");
+  for (const [collection, fields] of Object.entries(DEAD_FIELDS)) {
+    if (!collections.includes(collection)) {
+      console.log(`  ${collection}: la coleccion no existe, nada que hacer`);
+      continue;
+    }
+    for (const field of fields) {
+      await applyUpdate(
+        collection,
+        `${collection}.${field} $unset`,
+        { [field]: { $exists: true } },
+        { $unset: { [field]: "" } }
+      );
+    }
+  }
+}
+
+/**
+ * Borra las categorias sembradas que nadie usa. Idempotente por partida doble:
+ * si ya no existen no hay nada que borrar, y si alguien las empezo a usar el
+ * chequeo de uso las protege.
+ */
+async function dropUnusedSeededCategories() {
+  console.log("\n== CATEGORIAS SEMBRADAS SIN USO ==");
+  for (const name of UNUSED_SEEDED_CATEGORIES) {
+    const category = await prisma.category.findUnique({
+      where: { name },
+      include: {
+        _count: { select: { expenses: true, recurringExpenses: true, aliases: true } },
+      },
+    });
+    if (!category) {
+      console.log(`  ${name}: ya no existe, nada que hacer`);
+      continue;
+    }
+    const { expenses, recurringExpenses, aliases } = category._count;
+    if (expenses > 0 || recurringExpenses > 0 || aliases > 0) {
+      console.log(
+        `  ${name}: EN USO (gastos=${expenses} recurrentes=${recurringExpenses} aliases=${aliases}), NO se borra`
+      );
+      continue;
+    }
+    await prisma.category.delete({ where: { id: category.id } });
+    console.log(`  ${name}: borrada (0 gastos, 0 recurrentes, 0 aliases)`);
+  }
+}
+
 async function verify() {
   console.log("\n== VERIFICACION ==");
 
@@ -209,6 +296,44 @@ async function verify() {
     const types = await bsonTypes(collection, field);
     console.log(`  ${collection}.${field}: ${JSON.stringify(types)}`);
   }
+
+  console.log("Campos realmente presentes en los documentos (descubiertos, no asumidos):");
+  for (const collection of Object.keys(DEAD_FIELDS)) {
+    const res = (await prisma.$runCommandRaw({
+      aggregate: collection,
+      pipeline: [
+        { $project: { kv: { $objectToArray: "$$ROOT" } } },
+        { $unwind: "$kv" },
+        { $group: { _id: "$kv.k", n: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ],
+      cursor: {},
+    })) as { cursor: { firstBatch: { _id: string; n: number }[] } };
+    const present = res.cursor.firstBatch.map((f) => f._id);
+    const leftovers = DEAD_FIELDS[collection].filter((f) => present.includes(f));
+    console.log(`  ${collection}: ${present.join(", ")}`);
+    console.log(
+      leftovers.length === 0
+        ? `    OK: ningun campo del dominio viejo quedo en ${collection}.`
+        : `    FALLA: quedaron campos muertos: ${leftovers.join(", ")}`
+    );
+  }
+
+  console.log("Categorias:");
+  const categories = await prisma.category.findMany({
+    orderBy: { name: "asc" },
+    include: { _count: { select: { expenses: true, recurringExpenses: true } } },
+  });
+  for (const c of categories) {
+    console.log(
+      `  ${c.name.padEnd(18)} icon=${c.icon.padEnd(14)} color=${c.color}  gastos=${c._count.expenses} recurrentes=${c._count.recurringExpenses}`
+    );
+  }
+  const sumByCategory = categories.reduce((acc, c) => acc + c._count.expenses, 0);
+  console.log(`  total categorias: ${categories.length}`);
+  console.log(
+    `  suma de gastos por categoria: ${sumByCategory} ${sumByCategory === 386 ? "OK" : "FALLA"}`
+  );
 
   console.log("Lectura real con Prisma (es lo que falla si el backfill quedo corto):");
   const sample = await prisma.expense.findMany({
@@ -249,6 +374,8 @@ async function main() {
   await backfill(collections);
   await assertBackfillComplete();
   await dropOrphans(collections);
+  await cleanDeadFields(collections);
+  await dropUnusedSeededCategories();
   await verify();
 
   console.log("\nListo.");

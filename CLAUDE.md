@@ -49,6 +49,12 @@ hablen de eso, es residuo: reportalo.
   pasarle `DATABASE_URL` en el entorno del comando.
 - Hay índices que Prisma no puede expresar y se crean a mano. Ver
   [docs/data-models.md](docs/data-models.md#pasos-manuales-en-mongo).
+- **`User_telegramChatId_key` y `User_telegramLinkCode_key` tienen que existir
+  como `unique + sparse`.** En MongoDB un campo ausente se indexa como `null`, así
+  que en un índice único plano el **segundo** usuario sin vincular colisiona con el
+  primero y rompe el `db push` o el registro. `@unique` se queda en el schema: sin
+  declararlo, `db push` borraría el índice hecho a mano. Comando exacto y detalle
+  en [docs/data-models.md](docs/data-models.md#pasos-manuales-en-mongo).
 
 ### Scripts
 - Viven en `scripts/`, que está en el `exclude` del `tsconfig.json`: no se
