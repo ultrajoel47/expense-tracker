@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/auth";
+import { isHouseholdMemberEmail } from "@/lib/household";
 
 export async function POST(req: Request) {
   try {
@@ -19,6 +20,17 @@ export async function POST(req: Request) {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       return NextResponse.json({ error: "Credenciales invalidas" }, { status: 401 });
+    }
+
+    if (!isHouseholdMemberEmail(user.email)) {
+      console.error(
+        `Login rechazado: ${user.email} tiene cuenta pero NO esta en HOUSEHOLD_EMAILS. ` +
+          `Si es un miembro legitimo, es un typo en la variable de entorno.`
+      );
+      return NextResponse.json(
+        { error: "Esta cuenta no esta habilitada en esta instalacion" },
+        { status: 403 }
+      );
     }
 
     const token = signToken({ id: user.id, email: user.email });
