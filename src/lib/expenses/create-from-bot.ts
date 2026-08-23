@@ -89,6 +89,13 @@ export function buildConfirmation(e: {
    * nadie se entere.
    */
   unmatchedCardName?: string | null;
+  /**
+   * True cuando el mensaje confirma una CORRECCION y no un alta. Cambia el
+   * glifo de la primera linea: un "✓" en una correccion se lee como un gasto
+   * nuevo, y en una app de gastos "aparecio otro gasto" y "cambio el que ya
+   * estaba" no pueden verse igual.
+   */
+  corregido?: boolean;
 }): string {
   const fecha = new Intl.DateTimeFormat("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -97,7 +104,7 @@ export function buildConfirmation(e: {
   }).format(e.date);
 
   const lines = [
-    `✓ <b>${formatArs(e.amount)}</b> · ${e.description}`,
+    `${e.corregido ? "✏" : "✓"} <b>${formatArs(e.amount)}</b> · ${e.description}`,
     `${e.categoryName} · ${e.scope} · pago ${e.payerName} · ${fecha}` +
       (e.cardName ? ` · ${e.cardName}` : ""),
   ];

@@ -33,6 +33,17 @@ test("un monto normal no lleva advertencia", () => {
   assert.doesNotMatch(buildConfirmation(BASE), /⚠/);
 });
 
+test("corregido: true usa el glifo de lapiz en vez del check", () => {
+  const text = buildConfirmation({ ...BASE, corregido: true });
+  assert.match(text, /^✏/);
+  assert.doesNotMatch(text, /^✓/);
+});
+
+test("sin el campo corregido, sigue usando el check (comportamiento existente)", () => {
+  const text = buildConfirmation(BASE);
+  assert.match(text, /^✓/);
+});
+
 test("isAnomalous: por encima del promedio de la categoria por el factor relativo", () => {
   assert.equal(isAnomalous(50000, 2000), true);
 });
