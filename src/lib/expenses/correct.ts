@@ -17,9 +17,36 @@ export type CorrectableExpense = {
 };
 
 /**
+ * El cliente que ve el CUERPO de una transaccion de cuotas: sin
+ * `$transaction` (para que no se pueda anidar una transaccion dentro de
+ * otra) y con `installment.upsert`, que es lo que permite reconstruir las
+ * cuotas preservando `paid`/`paidAt` en vez de borrar y recrear. Ver el
+ * comentario de `rebuildInstallments`.
+ */
+type CorrectTxClient = {
+  installment: {
+    upsert(args: {
+      where: {
+        expenseId_installmentNumber: { expenseId: string; installmentNumber: number };
+      };
+      // La forma de una fila, no `unknown`: `InstallmentRow & { expenseId: string }`
+      // es el mismo shape que arma `buildInstallments` (importado de
+      // `installments.ts` para no duplicarlo) mas el `expenseId` que le falta.
+      create: InstallmentRow & { expenseId: string };
+      update: { amount: number; dueDate: Date };
+    }): Promise<unknown>;
+    deleteMany(args: {
+      where: { expenseId: string; installmentNumber?: { gt: number } };
+    }): Promise<unknown>;
+  };
+};
+
+/**
  * El minimo de Prisma que este modulo usa, escrito a mano para no importar
  * `@prisma/client` (rompe la pureza y los tests sin bundler). Mismo patron que
- * `src/lib/idempotency.ts`.
+ * `src/lib/idempotency.ts` y que `MaterializeClient` en
+ * `src/lib/recurring-materialize.ts`, de donde sale la forma de tipar
+ * `$transaction` sin importar el namespace de Prisma.
  */
 export type CorrectClient = {
   expense: {
@@ -27,17 +54,8 @@ export type CorrectClient = {
     update(args: unknown): Promise<unknown>;
     delete(args: { where: { id: string } }): Promise<unknown>;
   };
-  installment: {
-    deleteMany(args: { where: { expenseId: string } }): Promise<unknown>;
-    // La forma de una fila, no `unknown[]`: el `createMany` real de Prisma
-    // tipa `data` como `Fila | Fila[]` (acepta una sola fila suelta), y un
-    // `unknown[]` no es asignable a esa union porque el miembro no-array no
-    // es un array. `InstallmentRow & { expenseId: string }` en vez de repetir
-    // sus cuatro campos a mano: es el mismo shape que arma `rebuildInstallments`
-    // mas abajo, importado de `installments.ts` para no duplicarlo — si
-    // `buildInstallments` gana un campo, este tipo lo hereda solo.
-    createMany(args: { data: (InstallmentRow & { expenseId: string })[] }): Promise<unknown>;
-  };
+  installment: CorrectTxClient["installment"];
+  $transaction<T>(fn: (tx: CorrectTxClient) => Promise<T>): Promise<T>;
 };
 
 export type TargetResult =
@@ -149,24 +167,57 @@ export async function applyCorrection(
 }
 
 /**
- * Borra las cuotas de un gasto y las regenera desde su monto y fecha actuales.
- * Se exporta porque el PUT de la web tiene el mismo agujero y la arreglan las
- * dos con esta.
+ * Recalcula las cuotas de un gasto desde su monto y fecha actuales,
+ * **preservando `paid` y `paidAt`**.
+ *
+ * Antes esto borraba y recreaba, y eso destruia el estado de pago de todas las
+ * cuotas en el camino feliz: corregir el monto de una compra en 12 cuotas con 5
+ * tildadas como pagadas las devolvia a "no pagada" y le sumaba esas 5 a la
+ * "Deuda en Tarjetas" del dashboard, sin dejar rastro de que se habia perdido.
+ * En la base real, 56 de 66 cuotas estan pagadas: era el caso comun, no el raro.
+ *
+ * El `update` toca SOLO `amount` y `dueDate` — omitir `paid`/`paidAt` es lo que
+ * los conserva, y es deliberado: no los agregues "por completitud".
+ *
+ * Va en una transaccion porque el estado intermedio es destructivo: un gasto con
+ * `totalInstallments > 1` y sin filas de cuota **no aparece en ningun mes**
+ * (`expensesToCharges` no emite ningun cargo para el), o sea plata que existe y
+ * no se cuenta en ningun total. Ver el comentario de cabecera de
+ * `buildInstallments`, que ya nombra ese modo de falla.
+ *
+ * Se exporta porque el PUT de la web (`src/app/api/expenses/[id]/route.ts`) no
+ * tiene su propia transaccion abierta: esta es la que la abre para el.
  */
 export async function rebuildInstallments(
-  client: Pick<CorrectClient, "installment">,
+  client: Pick<CorrectClient, "$transaction">,
   expenseId: string,
   date: Date,
   total: number,
   count: number
 ): Promise<void> {
-  await client.installment.deleteMany({ where: { expenseId } });
   const rows = buildInstallments(date, total, count);
-  if (rows.length) {
-    await client.installment.createMany({
-      data: rows.map((r) => ({ ...r, expenseId })),
+
+  await client.$transaction(async (tx) => {
+    for (const row of rows) {
+      await tx.installment.upsert({
+        where: {
+          expenseId_installmentNumber: {
+            expenseId,
+            installmentNumber: row.installmentNumber,
+          },
+        },
+        create: { ...row, expenseId },
+        update: { amount: row.amount, dueDate: row.dueDate },
+      });
+    }
+
+    // Si el gasto quedo con menos cuotas que antes, sobran filas. Con
+    // `rows.length === 0` (un gasto que dejo de ser en cuotas) esto borra
+    // todas, porque los numeros empiezan en 1.
+    await tx.installment.deleteMany({
+      where: { expenseId, installmentNumber: { gt: rows.length } },
     });
-  }
+  });
 }
 
 /**
