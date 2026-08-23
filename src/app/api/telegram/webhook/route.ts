@@ -16,6 +16,8 @@ import { todayInBuenosAires } from "@/lib/ai/normalize";
 import type { GastoResult, CorreccionPatch } from "@/lib/ai/types";
 import { loadAliasesForPrompt, learnAlias, recordAliasHit } from "@/lib/aliases";
 import { buildConfirmation, describeChanges, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
+import { resolveConsulta } from "@/lib/queries/aggregate";
+import { formatConsultaAnswer } from "@/lib/queries/format";
 import {
   resolveCorrectionTarget,
   applyCorrection,
@@ -162,10 +164,28 @@ async function handleTextMessage(
     getAiProvider()
   );
 
+  if (parsed.intent === "consulta") {
+    // Corre en la Region 2: no hay ningun gasto que escribir ni confirmar, asi
+    // que devolver `null` es correcto aunque esto tire — el catch de la
+    // Region 2 le pide a la persona que reenvie, que es lo razonable para una
+    // pregunta que no se pudo contestar.
+    // `as never`: mismo patron que `materializeRecurringForMonthSafely(prisma
+    // as never, ...)` en `stats/route.ts`. `ConsultaClient.expense.findMany`
+    // esta tipado a mano como `(args: unknown) => Promise<ChargeableExpense[]>`
+    // para no importar `@prisma/client`; el tipo REAL de Prisma es generico
+    // sobre los `args` de cada llamada puntual, asi que TypeScript no puede
+    // verificar la asignabilidad del CLIENTE completo sin ver esa llamada.
+    const answer = await resolveConsulta(prisma as never, parsed.query, user.id, householdUserIds);
+    await sendMessage(intake.chatId, formatConsultaAnswer(answer, parsed.query));
+    return null;
+  }
+
   if (parsed.intent === "consulta_no_soportada") {
     await sendMessage(
       intake.chatId,
-      "Todavia no puedo responder preguntas sobre los gastos. Mira el dashboard en la web."
+      parsed.reason
+        ? `No puedo responder eso: ${parsed.reason}.`
+        : "Todavia no puedo responder preguntas sobre los gastos. Mira el dashboard en la web."
     );
     return null;
   }
