@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere, visibleRecurringExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds } from "@/lib/household";
 import { expensesToCharges } from "@/lib/expenses/charges";
+import { materializeRecurringForMonth } from "@/lib/recurring-materialize";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -14,6 +15,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const month = Number(url.searchParams.get("month") || new Date().getMonth() + 1);
   const year = Number(url.searchParams.get("year") || new Date().getFullYear());
+
+  // Perezoso: al leer un mes se crean los recurrentes que falten. Sin cron,
+  // porque el free tier de Vercel los limita y el VPS usaria otro mecanismo.
+  await materializeRecurringForMonth(prisma as never, year, month);
 
   const startDate = new Date(Date.UTC(year, month - 1, 1));
   const endDate = new Date(Date.UTC(year, month, 1));
