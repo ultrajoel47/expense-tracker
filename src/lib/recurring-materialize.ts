@@ -1,3 +1,14 @@
+/**
+ * El motor de materializacion de gastos recurrentes. Es un modulo PURO a
+ * proposito (recibe el cliente de Prisma por parametro, sin importar
+ * `@prisma/client` ni nada de servidor): eso es lo que lo hace testeable sin
+ * base y, desde 2B, lo que permite que `FRECUENCIAS_MATERIALIZABLES` se
+ * importe directamente desde `dashboard/recurring/page.tsx`, un COMPONENTE
+ * CLIENTE — ese import mete este archivo en el bundle del navegador. Es
+ * seguro hoy porque el modulo es puro por construccion, pero es una
+ * restriccion real de aca en mas: no le sumes ningun import de servidor
+ * (`@/lib/prisma`, `next/*`, variables de entorno, etc.) o rompe ese bundle.
+ */
 import { todayInBuenosAires } from "./ai/normalize.ts";
 
 export type MaterializeTemplate = {

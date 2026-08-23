@@ -2,6 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/format";
+import { FRECUENCIAS_MATERIALIZABLES } from "@/lib/recurring-materialize";
+
+/**
+ * `FRECUENCIAS_MATERIALIZABLES` son las unicas frecuencias que
+ * `materializeRecurringForMonth` convierte en gastos, y por lo tanto en plata
+ * contada en algun total. El formulario ofrece SOLO estas: una plantilla
+ * semanal o anual se guardaba, se listaba, aparecia en "proximos vencimientos"
+ * y no entraba en ningun total, nunca — el mismo sub-conteo silencioso que
+ * esta rebanada vino a cerrar.
+ *
+ * Las plantillas existentes con otra frecuencia (hoy no hay ninguna: las 10
+ * reales son MONTHLY) se siguen mostrando en la lista, marcadas como que no
+ * suman. Si algun dia el materializador aprende semanal o anual, agregar la
+ * frecuencia aca alcanza para que vuelva al formulario.
+ */
 
 interface Category {
   id: string;
@@ -34,20 +49,6 @@ const FREQ_LABELS: Record<string, string> = {
   MONTHLY: "Mensual",
   YEARLY: "Anual",
 };
-
-/**
- * Las unicas frecuencias que `materializeRecurringForMonth` convierte en
- * gastos, y por lo tanto en plata contada en algun total. El formulario
- * ofrece SOLO estas: una plantilla semanal o anual se guardaba, se listaba,
- * aparecia en "proximos vencimientos" y no entraba en ningun total, nunca —
- * el mismo sub-conteo silencioso que esta rebanada vino a cerrar.
- *
- * Las plantillas existentes con otra frecuencia (hoy no hay ninguna: las 10
- * reales son MONTHLY) se siguen mostrando en la lista, marcadas como que no
- * suman. Si algun dia el materializador aprende semanal o anual, agregar la
- * frecuencia aca alcanza para que vuelva al formulario.
- */
-const FREQ_MATERIALIZADAS = ["MONTHLY"] as const;
 
 const emptyForm = {
   amount: "",
@@ -223,12 +224,12 @@ export default function RecurringPage() {
                 className={inputCls}
                 required
               >
-                {FREQ_MATERIALIZADAS.map((value) => (
+                {FRECUENCIAS_MATERIALIZABLES.map((value) => (
                   <option key={value} value={value}>{FREQ_LABELS[value]}</option>
                 ))}
                 {/* Editar una plantilla vieja con otra frecuencia no se la
                     cambia en silencio: se ofrece su valor actual tambien. */}
-                {!FREQ_MATERIALIZADAS.includes(form.frequency as "MONTHLY") && (
+                {!FRECUENCIAS_MATERIALIZABLES.includes(form.frequency as "MONTHLY") && (
                   <option value={form.frequency}>
                     {FREQ_LABELS[form.frequency] ?? form.frequency} (no suma a los totales)
                   </option>
@@ -337,7 +338,7 @@ export default function RecurringPage() {
                     {rec.creditCard && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">· {rec.creditCard.name}</span>
                     )}
-                    {FREQ_MATERIALIZADAS.includes(rec.frequency as "MONTHLY") ? (
+                    {FRECUENCIAS_MATERIALIZABLES.includes(rec.frequency as "MONTHLY") ? (
                       <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium">
                         {FREQ_LABELS[rec.frequency] ?? rec.frequency}
                       </span>
