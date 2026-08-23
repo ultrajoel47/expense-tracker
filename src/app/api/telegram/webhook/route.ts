@@ -257,39 +257,77 @@ async function applyTextCorrection(
 
   const corrected = await applyCorrection(prisma, expense, patch, categories);
 
-  // El aprendizaje de alias corre DESPUES de la escritura de la correccion y
-  // nunca puede hacerla fallar: `learnAlias` ya no tira (ver su comentario),
-  // pero el `onError` queda igual para dejar constancia de que lo unico que
-  // se perdio es la equivalencia, no la correccion — que ya esta aplicada.
-  await learnAlias(
-    prisma,
-    {
-      description: corrected.description,
-      categoryId: corrected.categoryId,
-      scope: corrected.scope,
-      cambioLaCategoria: corrected.categoryId !== expense.categoryId,
-      cambioElAmbito: corrected.scope !== expense.scope,
-    },
-    (error) =>
-      console.error(
-        `No se pudo aprender el alias de la correccion de expenseId=${expense.id}: la ` +
-          "correccion SI se aplico, solo se perdio la equivalencia para el prompt.",
-        error
-      )
-  );
+  // Todo lo que sigue va en SU PROPIO try/catch: la escritura de arriba ya
+  // paso (`applyCorrection` es atomica desde I1, asi que si llegamos aca la
+  // correccion esta aplicada). El catch generico de la Region 2 diria "no
+  // quedo guardado nada: reenviame el mensaje", y ese reenvio es peligroso
+  // aca especificamente: si la persona no vuelve a responder al MISMO
+  // mensaje, `resolveCorrectionTarget` cae al respaldo (su ultimo gasto
+  // registrado) y le aplica la correccion a OTRO gasto. Ver el comentario de
+  // cabecera de las tres regiones, mas abajo en este archivo.
+  try {
+    // El aprendizaje de alias corre DESPUES de la escritura de la correccion y
+    // nunca puede hacerla fallar: `learnAlias` ya no tira (ver su comentario),
+    // pero el `onError` queda igual para dejar constancia de que lo unico que
+    // se perdio es la equivalencia, no la correccion — que ya esta aplicada.
+    await learnAlias(
+      prisma,
+      {
+        description: corrected.description,
+        categoryId: corrected.categoryId,
+        scope: corrected.scope,
+        cambioLaCategoria: corrected.categoryId !== expense.categoryId,
+        cambioElAmbito: corrected.scope !== expense.scope,
+      },
+      (error) =>
+        console.error(
+          `No se pudo aprender el alias de la correccion de expenseId=${expense.id}: la ` +
+            "correccion SI se aplico, solo se perdio la equivalencia para el prompt.",
+          error
+        )
+    );
 
-  return {
-    expenseId: expense.id,
-    amount: corrected.amount,
-    scope: corrected.scope,
-    confirmation: await buildCorrectedConfirmation(
-      expense,
-      expense.userId,
-      corrected,
-      categories,
-      members
-    ),
-  };
+    return {
+      expenseId: expense.id,
+      amount: corrected.amount,
+      scope: corrected.scope,
+      confirmation: await buildCorrectedConfirmation(
+        expense,
+        expense.userId,
+        corrected,
+        categories,
+        members
+      ),
+    };
+  } catch (error) {
+    // La correccion YA se aplico y lo que fallo es armar el mensaje. El catch de
+    // la Region 2 diria "no quedo guardado nada: reenviame el mensaje", y ese
+    // reenvio es peligroso: si la persona no vuelve a responder al mismo
+    // mensaje, `resolveCorrectionTarget` cae al respaldo (su ultimo gasto
+    // registrado) y le aplica la correccion a OTRO gasto. Hay que decirle
+    // exactamente lo contrario de lo que dice la Region 2.
+    console.error(
+      `CORRECCION APLICADA SIN CONFIRMAR: expenseId=${expense.id} chatId=${intake.chatId} — ` +
+        "fallo armar o mandar la confirmacion. El cambio SI esta en la base.",
+      error
+    );
+    try {
+      await sendMessage(
+        intake.chatId,
+        "La correccion SI se aplico, pero no pude armar el mensaje de confirmacion. " +
+          "NO me la mandes de nuevo: mira el gasto en la web."
+      );
+    } catch (avisoError) {
+      // El catch del aviso va aparte y solo loguea: mismo patron que el resto
+      // del archivo cuando el aviso mismo puede fallar.
+      console.error(
+        `Tampoco se pudo avisar de la correccion aplicada sin confirmar de expenseId=${expense.id} ` +
+          `chatId=${intake.chatId}.`,
+        avisoError
+      );
+    }
+    return null;
+  }
 }
 
 /**
@@ -754,10 +792,36 @@ async function handleCallback(
  * devuelve 503 y el reintento lo hace Telegram. Es la excepcion deliberada a
  * "siempre 200": aca romper la regla la mejora.
  *
- * **Region 2 — entre el claim y `expense.create`.** Todavia no se escribio
- * ningun gasto, asi que es seguro decirle a la persona que reenvie. Se le
- * avisa con un sendMessage y se contesta 200 (un reintento de Telegram aca
- * repetiria el trabajo de la IA sin necesidad, y la persona ya sabe).
+ * **Region 2 — entre el claim y la creacion de un `Expense` nuevo.** El
+ * nombre es historico: cuando se escribio este comentario, la unica
+ * escritura del flujo era `expense.create` (Region 3) y todo lo de aca
+ * arriba era, en efecto, "nada escrito todavia". Eso dejo de ser cierto: el
+ * Bloque 2 metio una escritura DENTRO de esta region
+ * (`applyTextCorrection` → `applyCorrection`, la correccion por texto libre)
+ * y una consulta puede disparar la materializacion de un recurrente
+ * (`resolveConsulta` → `materializeRecurringForMonthSafely`, que crea
+ * `Expense`s de alquiler/servicios que faltaban).
+ *
+ * El catch generico de esta region — "no pude registrar el gasto... no
+ * quedo guardado nada, reenviame el mensaje" — SOLO es verdad para los
+ * caminos que en efecto no escribieron nada (parsear el mensaje, resolver
+ * categoria/tarjeta/pagador, etc.). Cada escritura que vive DENTRO de la
+ * Region 2 se hace cargo de su propio "despues", para que ese catch generico
+ * nunca tenga que volver a mentir:
+ *
+ *   - **Correccion por texto:** `applyCorrection` es atomica (I1), asi que si
+ *     ELLA tira no escribio nada y el mensaje generico sigue siendo verdad.
+ *     Si lo que tira es lo que viene DESPUES —armar o mandar la confirmacion,
+ *     que hace dos lecturas propias (`aggregate` del promedio y `findFirst`
+ *     de la tarjeta)—, la escritura ya paso: `applyTextCorrection` lo atrapa
+ *     en su propio try/catch y le dice a la persona lo CONTRARIO del mensaje
+ *     generico ("no me la reenvies"), porque reenviarla sin responder al
+ *     mismo mensaje cae al respaldo de `resolveCorrectionTarget` (el ultimo
+ *     gasto que esa persona registro) y corrompe OTRO gasto (C1).
+ *   - **Materializacion de recurrentes:** `materializeRecurringForMonthSafely`
+ *     absorbe sus propios errores y nunca tira (ver su comentario), asi que
+ *     no necesita ningun try/catch propio aca: un fallo se resuelve como "no
+ *     se pudo materializar" sin tocar el resto del flujo de la consulta.
  *
  * **Region 3 — despues de `expense.create`.** El gasto YA existe. Aca pedirle
  * que reenvie CAUSARIA el duplicado, asi que no se le pide nada: se loguea y
@@ -807,7 +871,9 @@ export async function POST(req: Request) {
   }
   if (!claimed) return OK();
 
-  // ─── Region 2: nada escrito todavia, se puede pedir un reenvio ───────────
+  // ─── Region 2: puede haber escrito (correccion, materializacion) ─────────
+  // Ver el comentario de cabecera de `POST`, mas abajo en este archivo, para
+  // el detalle de por que el catch generico sigue siendo correcto igual.
   let registered: Registered | null;
   try {
     // Los miembros del hogar: acota el /start, la whitelist y la lista de
