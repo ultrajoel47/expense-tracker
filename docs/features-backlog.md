@@ -214,6 +214,48 @@ entre sí — la idempotencia de la materialización es por
 compiten por la misma fila — y no hace falta tocar la materialización POR
 plantilla dentro de cada mes, que puede seguir siendo secuencial.
 
+## 14 — Cuatro residuos de la re-review final del Bloque 3 ⬜
+
+Los encontró la re-review de las dos olas de arreglos. Ninguno corrompe datos por
+sí solo; los cuatro son sobre **qué le dice el bot a la persona** cuando algo
+falla, y los dos primeros valen una línea de código cada uno.
+
+1. **El catch de la Región 2 colapsa "quizás" en "nada" para una corrección por
+   texto.** Si `applyCorrection` tira, el mensaje afirma *"No quedó guardado nada:
+   reenviame el mensaje"*. Un throw no distingue "la transacción abortó" (que no
+   escribió nada) de "commiteó y se perdió el ack de red". En esa segunda ventana
+   el bot **instruye** la acción peligrosa: un reenvío sin reply cae al respaldo y
+   corrige otro gasto. Es la última asimetría entre el camino de texto y el de
+   botones, que sí distingue tres estados. Arreglo: atrapar el throw dentro de
+   `applyTextCorrection` y decir "no sé si se aplicó; si me la reenviás, respondé
+   a la misma confirmación".
+
+2. **La Región 3 describe una corrección como si fuera un alta.** Si falla el
+   `sendMessage` de la confirmación de una corrección, el log dice *"El Expense ya
+   está en la base… si reenvía, el gasto se duplica"* — falso: no se creó nada, y
+   el riesgo real es el opuesto (un reenvío sin reply corrige otro gasto). Arreglo:
+   distinguir los dos casos en el log y avisarle a la persona, que hoy en ese
+   camino no recibe nada.
+
+3. **"Mirá el gasto en la web" puede ser imposible.** Los mensajes de error del
+   camino de corrección mandan a la web, pero por la Regla de Dominio 5 un gasto
+   `personal` que esta persona **cargó pero no pagó** es editable desde el bot y no
+   existe para ella en la web. Arreglo: que el mensaje no prometa una acción que
+   puede no estar disponible.
+
+4. **Un alias sobrevive a que su gasto pase a `personal`.** `learnAlias` sólo
+   reacciona a un cambio de categoría, así que si se corrige la categoría de un
+   gasto de casa (se aprende el alias) y después se lo pasa a `personal`, el alias
+   queda con la descripción de un gasto hoy personal, en el prompt de los dos
+   miembros. La descripción se compartió legítimamente como "casa" en su momento,
+   pero no hay forma de desaprenderla: va pegado al ítem 12.
+
+Y dos asimetrías preexistentes que ahora tienen la herramienta para cerrarse: el
+`PUT` y el `DELETE` de `/api/expenses/[id]` siguen haciendo sus dos escrituras sin
+transacción común, mientras el bot ya usa las funciones atómicas de
+`src/lib/expenses/correct.ts`. Reusarlas ahí cierra el mismo modo de falla en la
+web.
+
 ---
 
 ## Descartados
