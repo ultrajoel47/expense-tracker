@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
   const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
   return NextResponse.json(categories);
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
   const { name, icon, color } = await req.json();
 
   if (!name || !name.trim()) {

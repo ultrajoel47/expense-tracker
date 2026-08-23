@@ -5,7 +5,17 @@ export interface AiProvider {
   complete(system: string, user: string): Promise<string>;
 }
 
-const FALLBACK_CATEGORY = "Otros";
+/**
+ * Categoria a la que cae un gasto cuando la IA devuelve una que no existe.
+ *
+ * Se EXPORTA porque no es un detalle interno de este modulo: `parseMessage`
+ * garantiza que `categoryName` es una de las categorias que se le pasaron o
+ * este literal, asi que el webhook tiene que poder resolverlo, y el DELETE/PUT
+ * de categorias tiene que negarse a borrarlo o renombrarlo. Si el literal
+ * viviera duplicado en esos tres lugares, cualquiera de los tres podria
+ * quedarse atras y romper el bot en silencio.
+ */
+export const FALLBACK_CATEGORY = "Otros";
 
 function buildSystemPrompt(ctx: ParseContext): string {
   const aliasLines = ctx.aliases.length

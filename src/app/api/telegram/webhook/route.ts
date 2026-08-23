@@ -4,7 +4,7 @@ import { requireEnv } from "@/lib/env";
 import { toIntake } from "@/lib/telegram/intake";
 import { claimUpdate, isDuplicateKeyError } from "@/lib/idempotency";
 import { sendMessage } from "@/lib/telegram/client";
-import { parseMessage } from "@/lib/ai/parse";
+import { FALLBACK_CATEGORY, parseMessage } from "@/lib/ai/parse";
 import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
 import { buildConfirmation, isAnomalous } from "@/lib/expenses/create-from-bot";
@@ -120,7 +120,31 @@ export async function POST(req: Request) {
       return OK();
     }
 
-    const category = categories.find((c) => c.name === parsed.categoryName)!;
+    // `parseMessage` garantiza que categoryName es una de las categorias que
+    // se le pasaron O el literal FALLBACK_CATEGORY. El caso que el `!` de
+    // antes no cubria es que la fila de respaldo NO EXISTA: `find` devuelve
+    // undefined, `category.id` tira, el catch de afuera contesta 200 y el
+    // usuario no recibe NADA — con el update_id ya quemado, asi que ni el
+    // reintento de Telegram lo salva. Es alcanzable hoy: DELETE
+    // /api/categories/[id] borra cualquier categoria sin gastos. Ahora la
+    // resolucion no puede tirar y, si falla, se le contesta al usuario.
+    const category =
+      categories.find((c) => c.name === parsed.categoryName) ??
+      categories.find((c) => c.name === FALLBACK_CATEGORY);
+
+    if (!category) {
+      console.error(
+        `No existe la categoria "${parsed.categoryName}" ni la de respaldo ` +
+          `"${FALLBACK_CATEGORY}": el gasto no se pudo registrar.`
+      );
+      await sendMessage(
+        intake.chatId,
+        `No lo pude registrar: no encontre la categoria "${parsed.categoryName}" ni la ` +
+          `categoria de respaldo "${FALLBACK_CATEGORY}". Creala en la web y probá de nuevo.`
+      );
+      return OK();
+    }
+
     const payer =
       (parsed.payerName &&
         members.find((m) => m.name.toLowerCase() === parsed.payerName!.toLowerCase())) ||
