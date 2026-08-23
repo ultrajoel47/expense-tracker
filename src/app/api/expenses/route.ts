@@ -5,26 +5,29 @@ import { visibleExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds, isHouseholdMember } from "@/lib/household";
 import { buildInstallments } from "@/lib/expenses/installments";
 import { materializeRecurringForMonth } from "@/lib/recurring-materialize";
+import { parsePeriodParams } from "@/lib/period-params";
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const householdUserIds = await getHouseholdUserIds();
-
   const url = new URL(req.url);
-  const month = url.searchParams.get("month");
-  const year = url.searchParams.get("year");
+
+  // Validar ANTES de materializar: estos dos numeros alimentan una ESCRITURA.
+  // Sin esto, `?month=13` creaba el periodo fantasma "2026-13" (que despues se
+  // duplicaba al visitar enero de 2027 de verdad) y `?month=abc` reventaba la
+  // lectura con un 500. Sin mes/anio explicitos se usa el mes actual, igual
+  // que antes.
+  const periodo = parsePeriodParams(url.searchParams.get("month"), url.searchParams.get("year"));
+  if (!periodo.ok) return NextResponse.json({ error: periodo.error }, { status: 400 });
+
+  const householdUserIds = await getHouseholdUserIds();
 
   // Perezoso: al leer un mes se crean los recurrentes que falten. Sin cron,
   // porque el free tier de Vercel los limita y el VPS usaria otro mecanismo.
-  // Sin mes/anio explicitos (ej. listado sin filtro), se usa el mes actual.
-  const hoy = new Date();
-  await materializeRecurringForMonth(
-    prisma as never,
-    year ? Number(year) : hoy.getFullYear(),
-    month ? Number(month) : hoy.getMonth() + 1
-  );
+  // El modulo acota el rango de meses materializables; ver
+  // PRIMER_PERIODO_MATERIALIZABLE.
+  await materializeRecurringForMonth(prisma as never, periodo.year, periodo.month);
   const categoryId = url.searchParams.get("categoryId");
   const description = url.searchParams.get("description");
   const scopeFilter = url.searchParams.get("scope");
@@ -40,9 +43,10 @@ export async function GET(req: Request) {
     andConditions.push({ scope: scopeFilter });
   }
 
-  if (month && year) {
-    startDate = new Date(Date.UTC(Number(year), Number(month) - 1, 1));
-    endDate = new Date(Date.UTC(Number(year), Number(month), 1));
+  // Solo se filtra por rango si vinieron los dos parametros, como antes.
+  if (periodo.explicito) {
+    startDate = new Date(Date.UTC(periodo.year, periodo.month - 1, 1));
+    endDate = new Date(Date.UTC(periodo.year, periodo.month, 1));
     andConditions.push({
       OR: [
         { totalInstallments: null, date: { gte: startDate, lt: endDate } },

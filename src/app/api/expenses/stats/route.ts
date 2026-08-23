@@ -5,19 +5,26 @@ import { visibleExpensesWhere, visibleRecurringExpensesWhere } from "@/lib/visib
 import { getHouseholdUserIds } from "@/lib/household";
 import { expensesToCharges } from "@/lib/expenses/charges";
 import { materializeRecurringForMonth } from "@/lib/recurring-materialize";
+import { parsePeriodParams } from "@/lib/period-params";
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  const householdUserIds = await getHouseholdUserIds();
-
   const url = new URL(req.url);
-  const month = Number(url.searchParams.get("month") || new Date().getMonth() + 1);
-  const year = Number(url.searchParams.get("year") || new Date().getFullYear());
+
+  // Validar ANTES de materializar: estos dos numeros alimentan una ESCRITURA.
+  // Ver el comentario equivalente en `src/app/api/expenses/route.ts`.
+  const parsed = parsePeriodParams(url.searchParams.get("month"), url.searchParams.get("year"));
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const { year, month } = parsed;
+
+  const householdUserIds = await getHouseholdUserIds();
 
   // Perezoso: al leer un mes se crean los recurrentes que falten. Sin cron,
   // porque el free tier de Vercel los limita y el VPS usaria otro mecanismo.
+  // El modulo acota el rango de meses materializables; ver
+  // PRIMER_PERIODO_MATERIALIZABLE.
   await materializeRecurringForMonth(prisma as never, year, month);
 
   const startDate = new Date(Date.UTC(year, month - 1, 1));
