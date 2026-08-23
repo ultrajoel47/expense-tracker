@@ -1,3 +1,6 @@
+import { FALLBACK_DESCRIPTION } from "./ai/parse.ts";
+import type { AliasForPrompt } from "./ai/types.ts";
+
 /**
  * Normaliza un patron de alias: minusculas, sin acentos, sin espacios de
  * sobra. Es lo que hace que "Panaderia", "panadería" y "  PANADERÍA  "
@@ -20,30 +23,22 @@ export function normalizePattern(text: string): string {
 }
 
 /**
- * El literal que `parseMessage` (`src/lib/ai/parse.ts`) usa como descripcion
- * de respaldo cuando la IA no devolvio ninguna. Replicado a mano, sin import,
- * porque `parse.ts` no lo exporta como constante — pero es EL MISMO valor a
- * proposito: si `parse.ts` cambia ese literal sin tocar este, `esPatronAprendible`
- * deja de reconocerlo y un gasto "sin descripcion" vuelve a poder aprenderse
- * como alias (ver el comentario de `PATRON_MINIMO`).
- */
-const DESCRIPCION_DE_RESPALDO = "Sin descripcion";
-
-/**
  * Un patron demasiado corto o generico no se aprende.
  *
- * `DESCRIPCION_DE_RESPALDO` es lo que `parseMessage` pone cuando la IA no
- * devolvio descripcion. Aprender un alias con ESE patron seria catastrofico
- * en silencio: quedaria una equivalencia "sin descripcion => tal categoria"
- * que despues se inyecta en el prompt y arrastra a esa categoria a todo gasto
- * sin descripcion.
+ * `FALLBACK_DESCRIPTION` (`src/lib/ai/parse.ts`) es lo que `parseMessage`
+ * pone cuando la IA no devolvio descripcion. Aprender un alias con ESE patron
+ * seria catastrofico en silencio: quedaria una equivalencia "sin descripcion
+ * => tal categoria" que despues se inyecta en el prompt y arrastra a esa
+ * categoria a todo gasto sin descripcion. Se IMPORTA en vez de replicarse a
+ * mano: una copia aparte podia divergir de `parse.ts` sin que nada lo
+ * marcara, y esta funcion dejaria de reconocer el literal real.
  */
 export const PATRON_MINIMO = 3;
 
 export function esPatronAprendible(pattern: string): boolean {
   const normalizado = normalizePattern(pattern);
   if (normalizado.length < PATRON_MINIMO) return false;
-  if (normalizado === normalizePattern(DESCRIPCION_DE_RESPALDO)) return false;
+  if (normalizado === normalizePattern(FALLBACK_DESCRIPTION)) return false;
   return true;
 }
 
@@ -62,14 +57,6 @@ export type AliasClient = {
     upsert(args: unknown): Promise<unknown>;
     updateMany(args: unknown): Promise<{ count: number }>;
   };
-};
-
-/** El alias resuelto contra el nombre de su categoria, listo para el prompt. */
-export type AliasForPrompt = {
-  pattern: string;
-  categoryName: string;
-  description: string | null;
-  scope: string | null;
 };
 
 /**

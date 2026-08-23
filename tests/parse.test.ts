@@ -216,6 +216,171 @@ test("un intent que no conocemos cae a desconocido", async () => {
   assert.equal(r.intent, "desconocido");
 });
 
+// ─── intent "consulta" ──────────────────────────────────────────────────────
+
+function consultaProvider(over: Record<string, unknown> = {}) {
+  return fakeProvider(
+    JSON.stringify({
+      intent: "consulta",
+      metric: "total",
+      from: "2026-08-01",
+      to: "2026-08-22",
+      categoryName: null,
+      scope: null,
+      ...over,
+    })
+  );
+}
+
+test("metric 'total' parsea con las fechas tal cual, sin recortar", async () => {
+  const r = await parseMessage("cuanto gastamos este mes?", CTX, consultaProvider());
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  assert.equal(r.query.metric, "total");
+  assert.equal(r.query.from.toISOString(), "2026-08-01T12:00:00.000Z");
+  assert.equal(r.query.to.toISOString(), "2026-08-22T12:00:00.000Z");
+  assert.equal(r.query.categoryName, null);
+  assert.equal(r.query.scope, null);
+});
+
+test("metric 'por_categoria' parsea", async () => {
+  const r = await parseMessage(
+    "en que se nos fue la plata este mes?",
+    CTX,
+    consultaProvider({ metric: "por_categoria" })
+  );
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  assert.equal(r.query.metric, "por_categoria");
+});
+
+test("metric 'tendencia' parsea", async () => {
+  const r = await parseMessage(
+    "como venimos comparado con antes?",
+    CTX,
+    consultaProvider({ metric: "tendencia", from: "2025-08-22" })
+  );
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  assert.equal(r.query.metric, "tendencia");
+});
+
+test("una metrica desconocida devuelve consulta_no_soportada con reason", async () => {
+  const r = await parseMessage(
+    "dame un informe ejecutivo",
+    CTX,
+    consultaProvider({ metric: "resumen_ejecutivo" })
+  );
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.match(r.reason ?? "", /tipo de pregunta/);
+});
+
+test("una categoria que no existe devuelve consulta_no_soportada con reason, no se descarta en silencio", async () => {
+  const r = await parseMessage(
+    "cuanto gastamos en criptomonedas?",
+    CTX,
+    consultaProvider({ categoryName: "Criptomonedas" })
+  );
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.match(r.reason ?? "", /Criptomonedas/);
+});
+
+test("'2026-02-31' se rechaza: Date la normalizaria a marzo si no se chequean los componentes", async () => {
+  const r = await parseMessage(
+    "cuanto gastamos en febrero?",
+    CTX,
+    consultaProvider({ from: "2026-02-01", to: "2026-02-31" })
+  );
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.match(r.reason ?? "", /fechas/);
+});
+
+test("un rango invertido (from > to) se rechaza", async () => {
+  const r = await parseMessage(
+    "cuanto gastamos?",
+    CTX,
+    consultaProvider({ from: "2026-08-22", to: "2026-08-01" })
+  );
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.match(r.reason ?? "", /reves/);
+});
+
+test("un 'to' futuro se recorta a hoy en vez de rechazarse", async () => {
+  // CTX.today es "2026-08-22": preguntar "cuanto llevamos este mes" el dia 22
+  // trae un `to` de fin de mes (futuro); la respuesta correcta es "hasta hoy".
+  const r = await parseMessage(
+    "cuanto llevamos este mes?",
+    CTX,
+    consultaProvider({ to: "2026-08-31" })
+  );
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  assert.equal(r.query.to.toISOString(), "2026-08-22T12:00:00.000Z");
+});
+
+test("un 'from' de hace 5 años se recorta al piso de CONSULTA_MESES_MAXIMOS", async () => {
+  const r = await parseMessage(
+    "como venimos desde siempre?",
+    CTX,
+    consultaProvider({ metric: "tendencia", from: "2021-01-01" })
+  );
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  // Piso: 24 meses antes de 2026-08-22 => 2024-08-22.
+  assert.equal(r.query.from.toISOString(), "2024-08-22T12:00:00.000Z");
+});
+
+test("un rango enteramente mas viejo que el piso se rechaza (los dos recortes lo invierten)", async () => {
+  const r = await parseMessage(
+    "como veniamos hace 10 años?",
+    CTX,
+    consultaProvider({ metric: "tendencia", from: "2015-01-01", to: "2015-12-31" })
+  );
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.match(r.reason ?? "", /atras/);
+});
+
+test("un scope invalido en la consulta queda en null, no rechaza la consulta", async () => {
+  const r = await parseMessage(
+    "cuanto gastamos?",
+    CTX,
+    consultaProvider({ scope: "compartido" })
+  );
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  assert.equal(r.query.scope, null);
+});
+
+test("scope 'casa' y 'personal' se conservan tal cual", async () => {
+  const casa = await parseMessage("cuanto gastamos de casa?", CTX, consultaProvider({ scope: "casa" }));
+  assert.equal(casa.intent, "consulta");
+  if (casa.intent === "consulta") assert.equal(casa.query.scope, "casa");
+
+  const personal = await parseMessage(
+    "cuanto gaste yo?",
+    CTX,
+    consultaProvider({ scope: "personal" })
+  );
+  assert.equal(personal.intent, "consulta");
+  if (personal.intent === "consulta") assert.equal(personal.query.scope, "personal");
+});
+
+test("una categoria valida se conserva en la query", async () => {
+  const r = await parseMessage(
+    "cuanto gastamos en ropa?",
+    CTX,
+    consultaProvider({ categoryName: "Ropa" })
+  );
+  assert.equal(r.intent, "consulta");
+  if (r.intent !== "consulta") return;
+  assert.equal(r.query.categoryName, "Ropa");
+});
+
 // ─── intent "correccion" ────────────────────────────────────────────────────
 
 function patchProvider(patch: Record<string, unknown>) {
