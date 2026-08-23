@@ -88,3 +88,50 @@ test("la fecha del gasto es el dia 1 del periodo, a mediodia UTC", async () => {
   await materializeRecurringForMonth(client as any, 2026, 3);
   assert.equal(creados[0].date.toISOString(), "2026-03-01T12:00:00.000Z");
 });
+
+test("una violacion P2002 concurrente (dos lecturas a la vez) se cuenta como 'ya existe', no revienta ni aborta el resto del lote", async () => {
+  const EXPENSAS = { ...ALQUILER, id: "rec-2", description: "Expensas" };
+  const creados: any[] = [];
+  let llamada = 0;
+  const client = {
+    recurringExpense: { findMany: async () => [ALQUILER, EXPENSAS] },
+    $transaction: async (fn: any) => {
+      llamada++;
+      // La primera plantilla pierde la carrera: otra lectura concurrente
+      // ya la creo y el indice unico parcial tira P2002.
+      if (llamada === 1) {
+        throw { code: "P2002" };
+      }
+      const tx = {
+        expense: {
+          findFirst: async () => null,
+          create: async ({ data }: any) => {
+            creados.push(data);
+            return { id: "nuevo" };
+          },
+        },
+      };
+      return fn(tx);
+    },
+  };
+
+  const n = await materializeRecurringForMonth(client as any, 2026, 3);
+
+  assert.equal(n, 1, "la plantilla que choco no cuenta como creada por esta llamada");
+  assert.equal(creados.length, 1, "la siguiente plantilla del lote se sigue procesando");
+  assert.equal(creados[0].description, "Expensas");
+});
+
+test("un error que no es P2002 se relanza, no se confunde con 'ya existe'", async () => {
+  const client = {
+    recurringExpense: { findMany: async () => [ALQUILER] },
+    $transaction: async () => {
+      throw new Error("conexion caida");
+    },
+  };
+
+  await assert.rejects(
+    () => materializeRecurringForMonth(client as any, 2026, 3),
+    /conexion caida/
+  );
+});

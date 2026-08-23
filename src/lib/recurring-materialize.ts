@@ -29,6 +29,23 @@ export function periodKey(year: number, month: number): string {
 }
 
 /**
+ * Verdadero si el error es la violacion de restriccion unica de Prisma
+ * (P2002), sin importar el namespace de Prisma para no romper la pureza
+ * de este modulo. Mismo patron que `isDuplicateKeyError` en
+ * `src/lib/idempotency.ts`. Cualquier otro error (timeout, caida de
+ * conexion, failover del replica set) no es una duplicacion: es un fallo
+ * real que hay que propagar.
+ */
+function isDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "P2002"
+  );
+}
+
+/**
  * Crea los `Expense` que faltan para las plantillas mensuales activas en el
  * mes pedido. Devuelve cuantos creo.
  *
@@ -47,6 +64,16 @@ export function periodKey(year: number, month: number): string {
  * unico PARCIAL que si sirve esta creado a mano en la base
  * (`Expense_recurring_period_unique_partial`) y es la red de seguridad; ver
  * `docs/data-models.md`.
+ *
+ * El `findFirst` es una optimizacion, no la garantia: en una app de dos
+ * personas, dos lecturas concurrentes (los dos integrantes del hogar
+ * abriendo el dashboard a la vez) pueden pasar ambas el `findFirst` bajo
+ * snapshot isolation y las dos intentar el `create`. La que pierde la
+ * carrera choca con el indice unico parcial y Prisma tira P2002 — eso se
+ * trata como "ya lo creo el otro" (no cuenta, no se relanza) y se sigue con
+ * la siguiente plantilla. Cualquier otro error SI se relanza: tratar un
+ * fallo transitorio como "ya existe" haria que el alquiler dejara de
+ * aparecer en silencio, que es peor que un 500.
  */
 export async function materializeRecurringForMonth(
   client: MaterializeClient,
@@ -66,30 +93,39 @@ export async function materializeRecurringForMonth(
     // No inventar un periodo anterior a la existencia de la plantilla.
     if (t.createdAt >= finDelMes) continue;
 
-    const creado = await client.$transaction(async (tx) => {
-      const ya = await tx.expense.findFirst({
-        where: { recurringExpenseId: t.id, recurringPeriod: periodo },
-      });
-      if (ya) return false;
+    let creado: boolean;
+    try {
+      creado = await client.$transaction(async (tx) => {
+        const ya = await tx.expense.findFirst({
+          where: { recurringExpenseId: t.id, recurringPeriod: periodo },
+        });
+        if (ya) return false;
 
-      await tx.expense.create({
-        data: {
-          amount: t.amount,
-          description: t.description,
-          // Dia 1 a mediodia UTC: cae dentro del mes en cualquier zona.
-          date: new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)),
-          categoryId: t.categoryId,
-          creditCardId: t.creditCardId,
-          userId: t.userId,
-          createdById: t.userId,
-          scope: t.scope,
-          source: "recurring",
-          recurringExpenseId: t.id,
-          recurringPeriod: periodo,
-        },
+        await tx.expense.create({
+          data: {
+            amount: t.amount,
+            description: t.description,
+            // Dia 1 a mediodia UTC: cae dentro del mes en cualquier zona.
+            date: new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)),
+            categoryId: t.categoryId,
+            creditCardId: t.creditCardId,
+            userId: t.userId,
+            createdById: t.userId,
+            scope: t.scope,
+            source: "recurring",
+            recurringExpenseId: t.id,
+            recurringPeriod: periodo,
+          },
+        });
+        return true;
       });
-      return true;
-    });
+    } catch (error) {
+      // Otra lectura concurrente gano la carrera y ya lo creo: no es una
+      // falla, es el indice unico parcial haciendo su trabajo. Seguir con
+      // la proxima plantilla en vez de abandonar el resto del lote.
+      if (isDuplicateKeyError(error)) continue;
+      throw error;
+    }
 
     if (creado) creados++;
   }
