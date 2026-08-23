@@ -38,6 +38,7 @@ interface Stats {
   allTimeRecent: RecentExpense[];
   totalCreditCardDebt: number;
   upcomingRecurring: UpcomingRecurring[];
+  trend12m: { month: string; total: number }[];
 }
 
 export default function DashboardPage() {
@@ -291,6 +292,44 @@ export default function DashboardPage() {
               <Legend />
               <Bar dataKey="amount" name="Gasto semanal" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Trend: 12 months */}
+      {stats.trend12m.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border dark:border-gray-700">
+          <h2 className="font-semibold mb-4">Tendencia 12 meses</h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <AreaChart data={stats.trend12m}>
+              <defs>
+                <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 10 }}
+                tickFormatter={(v) => {
+                  const [y, m] = String(v).split("-");
+                  return `${monthNames[Number(m) - 1]} ${y.slice(2)}`;
+                }}
+                stroke="currentColor"
+                opacity={0.5}
+              />
+              <YAxis tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.5} />
+              <Tooltip
+                formatter={(v) => [`$${formatCurrency(Number(v))}`, "Total"]}
+                labelFormatter={(l) => {
+                  const [y, m] = String(l).split("-");
+                  return `${monthNames[Number(m) - 1]} ${y}`;
+                }}
+                contentStyle={{ backgroundColor: "var(--tooltip-bg, #fff)", border: "1px solid var(--tooltip-border, #e5e7eb)", borderRadius: "8px" }}
+              />
+              <Area type="monotone" dataKey="total" stroke="#f59e0b" strokeWidth={2} fill="url(#colorTrend)" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
