@@ -9,6 +9,7 @@ import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
 import { buildConfirmation, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
 import { getHouseholdUserIds } from "@/lib/household";
+import { buildInstallments } from "@/lib/expenses/installments";
 
 const OK = () => NextResponse.json({ ok: true });
 const UNAUTHORIZED = () => NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -205,17 +206,7 @@ async function registerExpense(
       source: "bot",
       totalInstallments: parsed.installments,
       installments: parsed.installments
-        ? {
-            create: Array.from({ length: parsed.installments }, (_, i) => {
-              const due = new Date(parsed.date);
-              due.setMonth(due.getMonth() + i);
-              return {
-                installmentNumber: i + 1,
-                dueDate: due,
-                amount: parsed.amount / parsed.installments!,
-              };
-            }),
-          }
+        ? { create: buildInstallments(parsed.date, parsed.amount, parsed.installments) }
         : undefined,
     },
   });

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds } from "@/lib/household";
+import { buildInstallments } from "@/lib/expenses/installments";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -100,9 +101,6 @@ export async function POST(req: Request) {
     const expenseDate = date ? new Date(date) : new Date();
     const numInstallments =
       totalInstallments && totalInstallments > 1 ? Number(totalInstallments) : null;
-    const installmentAmount = numInstallments
-      ? Number(amount) / numInstallments
-      : Number(amount);
 
     const expense = await prisma.expense.create({
       data: {
@@ -119,17 +117,7 @@ export async function POST(req: Request) {
         scope: body.scope === "personal" ? "personal" : "casa",
         source: "web",
         installments: numInstallments
-          ? {
-              create: Array.from({ length: numInstallments }, (_, i) => {
-                const due = new Date(expenseDate);
-                due.setMonth(due.getMonth() + i);
-                return {
-                  installmentNumber: i + 1,
-                  dueDate: due,
-                  amount: installmentAmount,
-                };
-              }),
-            }
+          ? { create: buildInstallments(expenseDate, Number(amount), numInstallments) }
           : undefined,
       },
       include: {
