@@ -49,7 +49,7 @@ src/
 │   ├── household.ts             # Allowlist de emails → ids de los miembros
 │   ├── idempotency.ts           # claimUpdate() del webhook: el update_id se reclama antes de procesar
 │   ├── recurring-materialize.ts # Crea el Expense del período al materializar una plantilla recurrente
-│   ├── expenses/                # installments.ts, charges.ts (expensesToCharges), create-from-bot.ts
+│   ├── expenses/                # installments.ts, charges.ts (expensesToCharges), create-from-bot.ts, correct.ts
 │   ├── telegram/                # Cliente del bot y normalización de updates
 │   ├── ai/                      # AiProvider, parseMessage y el prompt
 │   ├── ocr/                     # (futuro) OcrEngine y sus backends
@@ -88,10 +88,18 @@ Los tres son seams **deliberados**, no accidentales.
 
 ### `src/lib/telegram/` — el canal de ingesta
 
-- `client.ts` — `sendMessage` contra la Bot API. `editMessage` y `getFile` se
-  suman cuando los necesiten las rebanadas de corrección y de OCR.
+- `client.ts` — `sendMessage`, `editMessageText`, `editMessageReplyMarkup` y
+  `answerCallbackQuery` contra la Bot API. `getFile` se suma cuando lo
+  necesite la rebanada de OCR.
 - `intake.ts` — convierte un update de Telegram en un `Intake` neutral
-  (`{ senderId, texto?, imagen?, replyToMessageId?, callbackData? }`).
+  (`{ senderId, texto?, imagen?, replyToMessageId?, callbackData?,
+  callbackQueryId?, callbackMessageId? }`).
+- `callbacks.ts` — los botones de la confirmación y el parseo de su
+  `callback_data`. El dato lleva el objetivo EXPLICITO ("poner personal"), no
+  una orden de invertir ("cambiar el scope"): Telegram no expira los mensajes,
+  así que un botón de hace semanas sigue siendo tocable, y con el objetivo
+  explícito tocarlo dos veces escribe dos veces lo mismo en vez de invertir el
+  estado dos veces y volver al punto de partida.
 
 El resto del pipeline consume `Intake` y no sabe nada de Telegram. Es lo que
 permitiría sumar WhatsApp después sin reescribir la ingesta.
@@ -131,6 +139,13 @@ Región 3 el gasto ya existe y pedir un reenvío **causaría** el duplicado: lo 
 que queda es el log, y por eso son dos catches separados (el del `sendMessage` y el
 del update de `botChatId`/`botMessageId`), para que ninguno afirme algo falso sobre
 si la persona recibió la confirmación.
+
+**Un tap de botón no pasa por estas tres regiones.** Se maneja entero dentro de
+`handleCallback`, con su propio `try/catch` que nunca deja escapar un error: el
+mensaje de la Región 2 le pide a la persona que "reenvíe el mensaje", y no hay
+mensaje que reenviar cuando lo que falló es un botón. `handleCallback` siempre
+contesta el `callback_query` (incluso en el camino de error), porque sin esa
+respuesta Telegram deja el botón girando y la persona no sabe si pasó algo.
 
 ### `src/lib/ai/` — el parseo del mensaje
 

@@ -10,6 +10,11 @@ Construido con Next.js 16, Prisma y MongoDB.
 
 - Carga de gastos por Telegram, con parseo del mensaje por IA (Groq, con xAI/Grok
   como alternativa detrás de la misma interfaz)
+- Corrección de un gasto desde el propio chat: por los botones de la
+  confirmación (cambiar el ámbito, la categoría, o borrar con un segundo tap
+  de confirmación), o por texto libre ("eso fue personal", "en realidad fueron
+  15 lucas") apuntando al gasto por reply o, si no hay reply, al último que
+  esa persona registró
 - Autenticacion con JWT en cookie httpOnly, y registro cerrado por allowlist de
   emails (`HOUSEHOLD_EMAILS`)
 - CRUD de gastos con categorias, tarjetas de crédito y cuotas
@@ -21,9 +26,8 @@ Construido con Next.js 16, Prisma y MongoDB.
 - Dashboard con graficos (Recharts)
 - Exportacion a CSV
 
-Todavía **no** están, aunque el diseño los contempla: el OCR de comprobantes y
-la corrección de un gasto por reply en Telegram. Ver
-[docs/features-backlog.md](docs/features-backlog.md).
+Todavía **no** está, aunque el diseño lo contempla: el OCR de comprobantes por
+foto. Ver [docs/features-backlog.md](docs/features-backlog.md).
 
 ## Tech Stack
 
