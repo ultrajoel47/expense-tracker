@@ -1,3 +1,5 @@
+import { formatArs } from "../format.ts";
+
 const ANOMALY_FACTOR = 10;
 
 /**
@@ -19,14 +21,6 @@ const ANOMALY_FACTOR = 10;
  * de lo que esta pareja gasta en un solo item.
  */
 const ABSOLUTE_CEILING = 2_000_000;
-
-export function formatArs(amount: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 /**
  * Normaliza un nombre de tarjeta para comparar: minusculas, sin acentos, sin
