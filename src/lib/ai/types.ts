@@ -45,4 +45,36 @@ export type ConsultaNoSoportadaResult = {
   intent: "consulta_no_soportada";
 };
 
-export type ParseResult = GastoResult | DesconocidoResult | ConsultaNoSoportadaResult;
+/**
+ * Los campos que una correccion puede cambiar. Deliberadamente NO incluye
+ * pagador, tarjeta ni cuotas: son los que cambian la identidad o la estructura
+ * del gasto, y por texto libre no hay forma de distinguir "lo pago Vir" como
+ * correccion de un gasto nuevo de Vir. Se corrigen en la web.
+ */
+export type CorreccionPatch = {
+  amount?: number;
+  description?: string;
+  date?: Date;
+  categoryName?: string;
+  scope?: ExpenseScope;
+};
+
+/**
+ * El mensaje corrige un gasto YA registrado.
+ *
+ * No lleva el gasto objetivo: el spec preveia un `target: "ultimo" |
+ * { expenseId }`, pero la IA no puede conocer un ObjectId, asi que un campo
+ * asi solo le daria la oportunidad de inventar uno. **El objetivo lo resuelve
+ * el codigo** (por reply, si no por ultimo gasto registrado), en
+ * `resolveCorrectionTarget`.
+ */
+export type CorreccionResult = {
+  intent: "correccion";
+  patch: CorreccionPatch;
+};
+
+export type ParseResult =
+  | GastoResult
+  | DesconocidoResult
+  | ConsultaNoSoportadaResult
+  | CorreccionResult;

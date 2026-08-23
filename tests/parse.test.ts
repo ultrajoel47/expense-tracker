@@ -216,6 +216,106 @@ test("un intent que no conocemos cae a desconocido", async () => {
   assert.equal(r.intent, "desconocido");
 });
 
+// ─── intent "correccion" ────────────────────────────────────────────────────
+
+function patchProvider(patch: Record<string, unknown>) {
+  const base = {
+    amount: null,
+    description: null,
+    date: null,
+    categoryName: null,
+    scope: null,
+    ...patch,
+  };
+  return fakeProvider(JSON.stringify({ intent: "correccion", patch: base }));
+}
+
+test("un patch de solo scope devuelve correccion con exactamente ese campo", async () => {
+  const result = await parseMessage("eso fue personal", CTX, patchProvider({ scope: "personal" }));
+  assert.equal(result.intent, "correccion");
+  if (result.intent !== "correccion") return;
+  assert.deepEqual(result.patch, { scope: "personal" });
+});
+
+test("un patch de solo monto devuelve correccion con exactamente ese campo", async () => {
+  const result = await parseMessage(
+    "en realidad fueron 15 lucas",
+    CTX,
+    patchProvider({ amount: "15 lucas" })
+  );
+  assert.equal(result.intent, "correccion");
+  if (result.intent !== "correccion") return;
+  assert.deepEqual(result.patch, { amount: 15000 });
+});
+
+test("un patch de monto y categoria devuelve correccion con exactamente esos dos campos", async () => {
+  const result = await parseMessage(
+    "en realidad fue en Ropa y salio 80 lucas",
+    CTX,
+    patchProvider({ amount: "80 lucas", categoryName: "Ropa" })
+  );
+  assert.equal(result.intent, "correccion");
+  if (result.intent !== "correccion") return;
+  assert.deepEqual(result.patch, { amount: 80000, categoryName: "Ropa" });
+});
+
+test("una categoria que no esta en ctx.categories se descarta y el resto del patch se aplica", async () => {
+  const result = await parseMessage(
+    "en realidad fue en Criptomonedas y 5000",
+    CTX,
+    patchProvider({ amount: 5000, categoryName: "Criptomonedas" })
+  );
+  assert.equal(result.intent, "correccion");
+  if (result.intent !== "correccion") return;
+  assert.deepEqual(result.patch, { amount: 5000 });
+});
+
+test("si la categoria descartada era el unico campo, el resultado es desconocido con la categoria en el reason", async () => {
+  const result = await parseMessage(
+    "en realidad fue en Criptomonedas",
+    CTX,
+    patchProvider({ categoryName: "Criptomonedas" })
+  );
+  assert.equal(result.intent, "desconocido");
+  if (result.intent !== "desconocido") return;
+  assert.match(result.reason, /Criptomonedas/);
+});
+
+test("un patch con todo en null devuelve desconocido", async () => {
+  const result = await parseMessage("no entiendo que decis", CTX, patchProvider({}));
+  assert.equal(result.intent, "desconocido");
+});
+
+test("una fecha ilegible en el patch se descarta", async () => {
+  const result = await parseMessage(
+    "cambiale la fecha",
+    CTX,
+    patchProvider({ date: "no-es-una-fecha" })
+  );
+  assert.equal(result.intent, "desconocido");
+});
+
+test("una fecha futura en el patch tambien se descarta (resolveDate ya la rechaza)", async () => {
+  const result = await parseMessage(
+    "cambiale la fecha a mañana",
+    CTX,
+    patchProvider({ date: "2026-09-01", amount: 5000 })
+  );
+  assert.equal(result.intent, "correccion");
+  if (result.intent !== "correccion") return;
+  assert.deepEqual(result.patch, { amount: 5000 });
+});
+
+test("patch ausente por completo no revienta y devuelve desconocido", async () => {
+  const provider = fakeProvider(JSON.stringify({ intent: "correccion" }));
+  let result: ParseResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await parseMessage("eso fue personal", CTX, provider);
+  });
+  assert.ok(result);
+  assert.equal(result.intent, "desconocido");
+});
+
 test("no revienta si amount es un objeto", async () => {
   const provider = fakeProvider(
     JSON.stringify({

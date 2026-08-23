@@ -1,5 +1,5 @@
 import { normalizeAmount, resolveDate } from "./normalize.ts";
-import type { ParseContext, ParseResult } from "./types.ts";
+import type { CorreccionPatch, CorreccionResult, DesconocidoResult, ParseContext, ParseResult } from "./types.ts";
 
 export interface AiProvider {
   complete(system: string, user: string): Promise<string>;
@@ -61,6 +61,19 @@ cuanto llevamos, mostrame los de tal categoria):
 Si el mensaje no describe un gasto ni es una de esas preguntas:
 { "intent": "desconocido", "reason": "<motivo breve>" }
 
+Si el mensaje CORRIGE un gasto que ya se registro ("eso fue personal", "en
+realidad fueron 15 lucas", "no, era farmacia", "cambiale la fecha a ayer"):
+{
+  "intent": "correccion",
+  "patch": {
+    "amount": <numero o null>,
+    "description": "<texto o null>",
+    "date": "<YYYY-MM-DD o null>",
+    "categoryName": "<una de la lista o null>",
+    "scope": "casa" | "personal" | null
+  }
+}
+
 Reglas:
 - Una transferencia, un pago o un "le pague a X" a una persona, un comercio o
   un alias TAMBIEN es un gasto (intent "gasto"), aunque no se compre algo
@@ -83,7 +96,14 @@ Reglas:
 - Nunca inventes una categoria que no este en la lista.
 - Para la fecha, resolve expresiones como "ayer" o "el viernes" contra la
   fecha de hoy y devolve SIEMPRE el formato YYYY-MM-DD.
-- Nunca devuelvas una fecha futura.`;
+- Nunca devuelvas una fecha futura.
+- Una correccion habla de algo YA registrado y no vuelve a describir el gasto
+  entero: "eso", "ese", "el ultimo", "en realidad", "no, era". En "patch" van
+  SOLO los campos que la persona corrige y el resto en null. Si el mensaje
+  describe un gasto con su monto y su concepto, es "gasto" y no "correccion",
+  aunque venga justo despues de otro gasto.
+- No se borra por texto: si la persona pide borrar o anular algo, devolve
+  "desconocido" con reason "para borrar usa el boton Borrar de la confirmacion".`;
 }
 
 function extractJson(raw: string): unknown {
@@ -97,6 +117,67 @@ function extractJson(raw: string): unknown {
   } catch {
     return null;
   }
+}
+
+/**
+ * Valida el patch de una correccion.
+ *
+ * **Un campo que no se entiende se DESCARTA, no cae a un default.** En un
+ * gasto nuevo, una categoria inventada cae a FALLBACK_CATEGORY porque hay que
+ * guardar algo; en una correccion no hay nada que guardar, y recategorizar a
+ * "Otros" un gasto que estaba bien seria destruir un dato correcto por un typo
+ * de la IA.
+ *
+ * Si al terminar el patch quedo vacio no es una correccion aplicable: se
+ * devuelve "desconocido" con el motivo, para que el bot lo diga en vez de
+ * contestar "listo" sin haber cambiado nada. Si quedo algo, se aplica eso: la
+ * confirmacion muestra el gasto resultante, asi que lo que no cambio se ve.
+ */
+function buildCorreccion(
+  parsed: Record<string, unknown>,
+  ctx: ParseContext
+): CorreccionResult | DesconocidoResult {
+  const raw = (parsed.patch ?? {}) as Record<string, unknown>;
+  const patch: CorreccionPatch = {};
+  const descartados: string[] = [];
+
+  if (raw.amount !== null && raw.amount !== undefined) {
+    const amount =
+      typeof raw.amount === "string" || typeof raw.amount === "number"
+        ? normalizeAmount(raw.amount)
+        : null;
+    if (amount === null) descartados.push("el monto");
+    else patch.amount = amount;
+  }
+
+  if (typeof raw.description === "string" && raw.description.trim()) {
+    patch.description = raw.description.trim();
+  }
+
+  if (raw.date !== null && raw.date !== undefined) {
+    const date = resolveDate(String(raw.date), new Date(`${ctx.today}T12:00:00.000Z`));
+    if (date === null) descartados.push("la fecha");
+    else patch.date = date;
+  }
+
+  if (typeof raw.categoryName === "string" && raw.categoryName.trim()) {
+    const nombre = raw.categoryName.trim();
+    if (ctx.categories.includes(nombre)) patch.categoryName = nombre;
+    else descartados.push(`la categoria "${nombre}"`);
+  }
+
+  if (raw.scope === "casa" || raw.scope === "personal") patch.scope = raw.scope;
+
+  if (Object.keys(patch).length === 0) {
+    return {
+      intent: "desconocido",
+      reason: descartados.length
+        ? `no pude entender ${descartados.join(" ni ")}`
+        : "no entendi que queres corregir",
+    };
+  }
+
+  return { intent: "correccion", patch };
 }
 
 export async function parseMessage(
@@ -118,6 +199,10 @@ export async function parseMessage(
 
   if (parsed.intent === "consulta_no_soportada") {
     return { intent: "consulta_no_soportada" };
+  }
+
+  if (parsed.intent === "correccion") {
+    return buildCorreccion(parsed, ctx);
   }
 
   if (parsed.intent !== "gasto") {
