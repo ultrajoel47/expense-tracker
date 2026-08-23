@@ -183,6 +183,54 @@ el push siguiente. Declarado, Prisma ve un índice con el nombre y las claves qu
 espera y lo deja intacto: no lo lista como cambio pendiente y `db push` reporta
 `already in sync`. Verificado en tres pushes consecutivos.
 
+### Peligro nombrado: nunca escribir `null` en un campo `@unique`, ni con índice sparse
+
+Cuarta aparición de la misma familia de bug en este proyecto (las otras tres:
+el índice sparse de arriba, el `E11000` en `telegramChatId` durante el primer
+`db push`, y el hallazgo de limpieza de la Tarea 9). Suficientemente repetido
+como para nombrarlo aparte en vez de dejarlo disperso:
+
+**En MongoDB, un índice único sparse ignora un documento donde el campo está
+ausente, pero SÍ indexa un documento donde el campo vale `null` explícito.**
+Escribir `null` con Prisma (`data: { campo: null }`) no deja el campo ausente
+— lo deja presente con valor `null`, que el índice sparse indexa igual que
+cualquier otro valor. Dos documentos con `null` explícito en el mismo campo
+`@unique` colisionan entre sí exactamente como colisionarían con el mismo
+string repetido.
+
+Ejemplo real: el handler de `/start` en
+`src/app/api/telegram/webhook/route.ts` limpia `telegramLinkCode` al vincular
+un chat. Si lo hace con `telegramLinkCode: null`, el primer usuario que se
+vincula deja un `null` explícito en su documento; cuando el segundo usuario
+completa `/start`, Prisma intenta poner `null` también en el suyo, choca
+contra el índice único sparse (`P2002`), el `update` completo tira, y el
+código queda sin responder — silencio total en el flujo de vinculación, con
+el segundo usuario bloqueado permanentemente sin saber por qué.
+
+**Regla:** para vaciar un campo `String? @unique` (sparse o no), usar la
+sintaxis de Prisma `{ unset: true }`, nunca `null`:
+
+```ts
+// MAL — dos "null" explícitos colisionan en el índice único sparse.
+data: { telegramLinkCode: null }
+
+// BIEN — el campo queda ausente, el índice sparse lo ignora.
+data: { telegramLinkCode: { unset: true } }
+```
+
+Para confirmar que un campo quedó realmente ausente (no `null`), no alcanza
+con leerlo por Prisma — Prisma normaliza "ausente" y "`null`" al mismo `null`
+en JS. Hay que ir a Mongo crudo, por ejemplo con `$runCommandRaw` y un
+chequeo de tipo:
+
+```js
+db.User.find({ telegramLinkCode: { $type: "null" } })  // debería ser []
+```
+
+Aplica a los dos campos de `User` con índice sparse (`telegramChatId` y
+`telegramLinkCode`) y a cualquier otro campo `@unique` que se agregue más
+adelante.
+
 ### Índice TTL en ProcessedUpdate
 
 `processedAt` con TTL, para que la tabla de idempotencia no crezca sin límite.

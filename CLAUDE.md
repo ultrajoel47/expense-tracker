@@ -55,6 +55,10 @@ hablen de eso, es residuo: reportalo.
   primero y rompe el `db push` o el registro. `@unique` se queda en el schema: sin
   declararlo, `db push` borraría el índice hecho a mano. Comando exacto y detalle
   en [docs/data-models.md](docs/data-models.md#pasos-manuales-en-mongo).
+- **En un campo `@unique`, nunca escribir `null` — usar `{ unset: true }`.** Un
+  índice sparse ignora un campo ausente pero SÍ indexa un `null` explícito, así que
+  dos `null` colisionan igual. Detalle en
+  [docs/data-models.md](docs/data-models.md#peligro-nombrado-nunca-escribir-null-en-un-campo-unique-ni-con-índice-sparse).
 
 ### Scripts
 - Viven en `scripts/`, que está en el `exclude` del `tsconfig.json`: no se

@@ -50,7 +50,10 @@ export async function POST(req: Request) {
       try {
         await prisma.user.update({
           where: { id: user.id },
-          data: { telegramChatId: intake.chatId, telegramLinkCode: null },
+          // { unset: true }, no null: telegramLinkCode tiene un indice unico
+          // sparse. Un null explicito SI se indexa y colisiona entre dos
+          // usuarios; un campo ausente lo ignora. Ver docs/data-models.md.
+          data: { telegramChatId: intake.chatId, telegramLinkCode: { unset: true } },
         });
       } catch (error) {
         if (isDuplicateKeyError(error)) {
