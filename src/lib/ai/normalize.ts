@@ -21,6 +21,12 @@ export function normalizeAmount(raw: string | number): number | null {
       ? 1_000_000
       : 1;
 
+  // Guard: if slang multiplier and multiple digit groups, ambiguous — reject.
+  if (multiplier > 1) {
+    const digitGroups = text.match(/\d+/g) || [];
+    if (digitGroups.length > 1) return null;
+  }
+
   let numeric = text.replace(/[^\d.,]/g, "");
   if (!numeric) return null;
 

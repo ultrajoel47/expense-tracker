@@ -56,3 +56,16 @@ test("todayInBuenosAires usa la zona de Argentina y no UTC", () => {
   // 02:30 UTC del 22 son las 23:30 del 21 en Buenos Aires (UTC-3)
   assert.equal(todayInBuenosAires(new Date("2026-08-22T02:30:00Z")), "2026-08-21");
 });
+
+test("normalizeAmount rechaza compound slang que podria ser interpretado de multiples formas", () => {
+  assert.equal(normalizeAmount("3 lucas con 500"), null);
+  assert.equal(normalizeAmount("12 lucas el 15"), null);
+  assert.equal(normalizeAmount("2 palos y 300"), null);
+});
+
+test("normalizeAmount sigue pasando los cuatro casos validos con separadores", () => {
+  assert.equal(normalizeAmount("12.500"), 12500);
+  assert.equal(normalizeAmount("1.250.300"), 1250300);
+  assert.equal(normalizeAmount("12500,50"), 12500.5);
+  assert.equal(normalizeAmount("12 lucas"), 12000);
+});
