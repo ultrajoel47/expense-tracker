@@ -19,7 +19,7 @@ implementadas o están incompletas en el sistema. Ordenadas por prioridad.
 
 | # | Feature | Estado | Notas |
 |---|---------|--------|-------|
-| 1 | [Cuotas: filtrado por dueDate](#1-cuotas--filtrado-correcto-por-mes) | ✅ Completo | En `expenses/route.ts` |
+| 1 | [Cuotas: filtrado por dueDate](#1-cuotas--filtrado-correcto-por-mes) | ✅ Completo | Semántica de flujo en las dos rutas de lectura |
 | 3 | [Tarjeta: responsable de pago ≠ dueño](#3-tarjeta-responsable-de-pago--dueño) | ⬜ Pendiente | |
 | 4 | [Total por tarjeta con vencimiento mensual](#4-total-por-tarjeta-con-vencimiento-mensual) | ⬜ Pendiente | |
 | 5 | [Separación débito vs crédito en resumen](#5-separación-débito-vs-crédito) | ⬜ Pendiente | |
@@ -35,16 +35,29 @@ viejas a "el ítem 9" no apunten a otra cosa.
 
 ### 1. Cuotas — Filtrado correcto por mes
 
-**Problema:** Al filtrar gastos por mes, se usa `expense.date` (fecha de la
-compra). Un gasto en 12 cuotas aparece entero en el mes de compra y en ningún
-otro.
+**Problema original:** al filtrar gastos por mes, se usaba `expense.date`
+(fecha de la compra). Un gasto en 12 cuotas aparecía entero en el mes de
+compra y en ningún otro.
 
-**Comportamiento correcto:** Usar `installment.dueDate`. Cada mes solo debe
-aparecer la cuota que vence ese mes, con su monto parcial (`installmentAmount`).
+**Lo que pasó después:** la Rebanada 1 arregló esto solo en el listado
+(`expenses/route.ts`), que pasó a usar `installment.dueDate`. Los gráficos
+(`expenses/stats/route.ts`) siguieron usando `expense.date`, así que el mismo
+mes daba dos totales distintos según la ruta — es el bug que el usuario
+encontró. El ítem se había marcado "✅ Completo" cuando en realidad solo una
+de las dos rutas de lectura tenía el comportamiento correcto.
 
-**Estado:** implementado en `src/app/api/expenses/route.ts`. Cuando se reconstruya
-la vista de la casa y se materialicen los recurrentes (Rebanada 3), hay que
-aplicar el mismo criterio ahí.
+**Resuelto en la Rebanada 3 (Enmienda 1 del spec):** las dos rutas ahora
+comparten la misma semántica de FLUJO — lo que se muestra en un mes es lo que
+efectivamente se paga ese mes, no lo que se compró:
+
+- Un gasto sin cuotas cuenta por su monto, en el mes de su `date`.
+- Un gasto en cuotas cuenta por el monto de cada cuota, en el mes del
+  `dueDate` de esa cuota — nunca por el monto total, y nunca en el mes de la
+  compra.
+
+La regla vive en un único lugar, `expensesToCharges` (`src/lib/expenses/charges.ts`),
+que consumen tanto el listado como los gráficos. Detalle completo en
+[la Enmienda 1](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md#enmienda-1--semántica-de-cuotas-decidida-2026-08-23-rebanada-3).
 
 ---
 

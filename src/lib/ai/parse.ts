@@ -54,7 +54,11 @@ Formato de respuesta para un gasto:
   "cardName": "<nombre de la tarjeta o null>"
 }
 
-Si el mensaje no describe un gasto:
+Si el mensaje es una PREGUNTA sobre gastos ya registrados (cuanto gastamos,
+cuanto llevamos, mostrame los de tal categoria):
+{ "intent": "consulta_no_soportada" }
+
+Si el mensaje no describe un gasto ni es una de esas preguntas:
 { "intent": "desconocido", "reason": "<motivo breve>" }
 
 Reglas:
@@ -110,6 +114,10 @@ export async function parseMessage(
   const parsed = extractJson(raw) as Record<string, unknown> | null;
   if (!parsed) {
     return { intent: "desconocido", reason: "La IA no devolvio JSON valido" };
+  }
+
+  if (parsed.intent === "consulta_no_soportada") {
+    return { intent: "consulta_no_soportada" };
   }
 
   if (parsed.intent !== "gasto") {

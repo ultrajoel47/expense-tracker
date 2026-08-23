@@ -43,10 +43,13 @@ src/
 │   ├── theme.tsx                # Dark mode
 │   ├── visibility.ts            # Regla de scope, permiso de edición y política de membresía
 │   ├── household.ts             # Allowlist de emails → ids de los miembros
+│   ├── idempotency.ts           # claimUpdate() del webhook: el update_id se reclama antes de procesar
+│   ├── recurring-materialize.ts # Crea el Expense del período al materializar una plantilla recurrente
+│   ├── expenses/                # installments.ts, charges.ts (expensesToCharges), create-from-bot.ts
 │   ├── telegram/                # Cliente del bot y normalización de updates
 │   ├── ai/                      # AiProvider, parseMessage y el prompt
-│   ├── ocr/                     # OcrEngine y sus backends
-│   └── queries/                 # Agregaciones para las consultas del bot
+│   ├── ocr/                     # (futuro) OcrEngine y sus backends
+│   └── queries/                 # (futuro) Agregaciones para las consultas del bot
 ├── prisma/
 │   └── schema.prisma            # Los 8 modelos
 └── scripts/                     # Semillas y migraciones puntuales (sin type-check)
@@ -165,3 +168,8 @@ el mismo pipeline que un gasto escrito.
   Las dos son defensas contra duplicados silenciosos, que es la falla más
   peligrosa del sistema porque no se nota. En las dos, **escribir la marca
   después del trabajo anula la defensa**.
+- **Semántica de cuotas**: lo que se muestra en un mes es lo que efectivamente
+  se paga ese mes (el monto de la cuota que vence, no el total de la compra);
+  `expensesToCharges` (`src/lib/expenses/charges.ts`) es el ÚNICO lugar donde
+  vive esa regla, y tanto el listado como los gráficos la consumen — ver la
+  Enmienda 1 del [diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).

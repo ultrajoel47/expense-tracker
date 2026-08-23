@@ -33,4 +33,16 @@ export type DesconocidoResult = {
   reason: string;
 };
 
-export type ParseResult = GastoResult | DesconocidoResult;
+/**
+ * El mensaje es una PREGUNTA sobre gastos ya registrados ("cuanto gastamos
+ * este mes", "mostrame los de tal categoria"), no un gasto nuevo ni un
+ * mensaje sin sentido. Las consultas son de una rebanada futura: distinguir
+ * este caso de "desconocido" es lo que le permite al webhook contestar "todavia
+ * no puedo responder eso" en vez de "no pude registrar el gasto", que
+ * confunde una funcion inexistente con una falla.
+ */
+export type ConsultaNoSoportadaResult = {
+  intent: "consulta_no_soportada";
+};
+
+export type ParseResult = GastoResult | DesconocidoResult | ConsultaNoSoportadaResult;

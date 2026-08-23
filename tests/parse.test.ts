@@ -204,6 +204,18 @@ test("no revienta si amount es un array", async () => {
   assert.equal(result.intent, "desconocido");
 });
 
+test("una pregunta devuelve consulta_no_soportada, no desconocido", async () => {
+  const provider = fakeProvider(JSON.stringify({ intent: "consulta_no_soportada" }));
+  const r = await parseMessage("cuanto gastamos este mes?", CTX, provider);
+  assert.equal(r.intent, "consulta_no_soportada");
+});
+
+test("un intent que no conocemos cae a desconocido", async () => {
+  const provider = fakeProvider(JSON.stringify({ intent: "bailar" }));
+  const r = await parseMessage("bailemos", CTX, provider);
+  assert.equal(r.intent, "desconocido");
+});
+
 test("no revienta si amount es un objeto", async () => {
   const provider = fakeProvider(
     JSON.stringify({

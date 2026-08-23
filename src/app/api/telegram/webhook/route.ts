@@ -127,6 +127,14 @@ async function registerExpense(
     getAiProvider()
   );
 
+  if (parsed.intent === "consulta_no_soportada") {
+    await sendMessage(
+      intake.chatId,
+      "Todavia no puedo responder preguntas sobre los gastos. Mira el dashboard en la web."
+    );
+    return null;
+  }
+
   if (parsed.intent !== "gasto") {
     await sendMessage(intake.chatId, `No lo pude registrar: ${parsed.reason}`);
     return null;
