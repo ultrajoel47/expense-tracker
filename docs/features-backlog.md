@@ -26,6 +26,8 @@ implementadas o están incompletas en el sistema. Ordenadas por prioridad.
 | 6 | [Proyección crédito mes siguiente](#6-proyección-crédito-mes-siguiente) | ⬜ Pendiente | |
 | 7 | [Selector de mes histórico](#7-selector-de-mes-histórico) | ⬜ Pendiente | |
 | 12 | [Desaprender un alias](#12-desaprender-un-alias) | ⬜ Pendiente | |
+| 13 | [Backfill de consulta con el monto actual de la plantilla](#13-backfill-de-consulta-con-el-monto-actual-de-la-plantilla) | ⬜ Pendiente | Hoy inocuo: la ventana materializable es de un mes solo |
+| 14 | [Materialización secuencial de una consulta](#14-materializacion-secuencial-de-una-consulta) | ⬜ Pendiente | Hoy inocuo: hasta 240 idas a la base en el peor caso teórico |
 
 La numeración se conserva con huecos a propósito, para que las referencias
 viejas a "el ítem 9" no apunten a otra cosa.
@@ -159,6 +161,58 @@ consultas las necesite resolver.
   prompt por los que sí se usan. No es una solución (sigue en la base y puede
   volver a entrar si empieza a "acertar" por casualidad), pero acota el impacto
   mientras no existe una forma de borrarlo.
+
+**La opción rica que se descartó para la restricción de privacidad de los
+aliases (Bloque 3B, ola de arreglos B):** hoy `learnAlias` no aprende de un
+gasto `personal` porque `Alias` no tiene `userId` — un alias es global a los
+dos miembros del hogar, así que aprender de un gasto personal filtraría su
+descripción al contexto (y al proveedor de IA externo) de la otra persona,
+indefinidamente. Agregar un `userId` a `Alias` permitiría que cada persona
+tuviera sus propios aliases, y con eso volver a aprender de sus gastos
+personales sin cruzar la privacidad. **No entró** porque requiere migrar el
+schema (`prisma/schema.prisma`, con datos reales en la tabla) y no hacía falta
+para cerrar el hallazgo de privacidad: no aprender de personales alcanza y es
+mucho más simple.
+
+---
+
+### 13. Backfill de consulta con el monto actual de la plantilla
+
+**Descripción:** una consulta puede hacer *backfill* hasta 24 meses atrás en un
+solo mensaje (`CONSULTA_MESES_MAXIMOS`, `src/lib/ai/parse.ts`), y
+`resolveConsulta` (`src/lib/queries/aggregate.ts`) materializa cada mes del
+rango antes de leer. La materialización usa el monto que la plantilla
+recurrente tiene **hoy**, no el que tenía en el mes que se está creando (ver
+`materializeRecurringForMonth`, `src/lib/recurring-materialize.ts`).
+
+**Por qué hoy es inocuo:** `esPeriodoMaterializable` acota la ventana
+materializable a `[PRIMER_PERIODO_MATERIALIZABLE, el mes actual]`, y ese piso
+coincide con el mes actual (2026-08) al momento de escribir esto. La ventana
+real es de UN mes solo, así que no hay ningún mes "viejo" que backfillear con
+un monto equivocado todavía.
+
+**Por qué deja de serlo:** a partir de septiembre de 2026 el piso queda un mes
+atrás del actual, y crece cada mes que pasa. Una pregunta como "cómo venimos
+este año" puede entonces materializar el alquiler de un mes viejo (dentro de
+la ventana pero anterior al mes en curso) usando el monto de HOY, no el que la
+plantilla tenía en ese momento — si el alquiler se indexó en el medio, ese mes
+queda con un monto que nunca se cobró.
+
+---
+
+### 14. Materialización secuencial de una consulta
+
+**Descripción:** el loop de materialización de `resolveConsulta` es
+secuencial: mes por mes, y dentro de cada mes, plantilla por plantilla (ver
+`materializeRecurringForMonth`). Con el backfill de hasta 24 meses (ítem 13
+de arriba) y unas 10 plantillas activas, una sola consulta puede disparar
+hasta 240 idas a la base en serie antes de poder contestar.
+
+**El arreglo natural:** paralelizar por MES. Los meses son independientes
+entre sí — la idempotencia de la materialización es por
+`(recurringExpenseId, recurringPeriod)`, así que dos meses distintos nunca
+compiten por la misma fila — y no hace falta tocar la materialización POR
+plantilla dentro de cada mes, que puede seguir siendo secuencial.
 
 ---
 

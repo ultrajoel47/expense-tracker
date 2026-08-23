@@ -148,6 +148,27 @@ mensaje que reenviar cuando lo que falló es un botón. `handleCallback` siempre
 contesta el `callback_query` (incluso en el camino de error), porque sin esa
 respuesta Telegram deja el botón girando y la persona no sabe si pasó algo.
 
+Que el `try/catch` nunca deje escapar un error no quiere decir que solo tenga
+un mensaje de error. El catch distingue TRES estados de la escritura, no un
+booleano, porque un booleano seteado antes de escribir hacía que un borrado
+fallido contestara "el cambio se aplicó" sobre la única acción irreversible
+del teclado:
+
+- **"nada"** — todavía no se intentó escribir. Se le puede decir a la persona
+  que no se aplicó nada.
+- **"quizás"** — se llamó a la escritura (un `applyCorrection` o un
+  `deleteExpenseWithInstallments`) y tiró sin volver: no se puede saber si
+  llegó a confirmarse en la base antes de fallar. Es el único estado honesto
+  para ese caso, y **no se puede colapsar** en los otros dos sin mentir en una
+  de las dos direcciones.
+- **"sí"** — la escritura volvió bien y lo que falló es lo que viene después
+  (reescribir el mensaje o acusar el `callback_query`). El cambio SÍ está
+  aplicado.
+
+Cada estado tiene su propio texto para la persona ("no pude aplicar el
+cambio", "no sé si el cambio se alcanzó a aplicar, revisá antes de volver a
+tocar el botón", "el cambio se aplicó pero no pude actualizar el mensaje").
+
 ### `src/lib/ai/` — el parseo del mensaje
 
 - `provider.ts` — la interfaz `AiProvider` y `getAiProvider()`, que elige la
@@ -189,8 +210,17 @@ equivalencia — nadie llena un formulario de aliases.
   granularidad que un alias necesita. De "transferí 12 lucas a Juan Pérez" la
   descripción es "Juan Pérez", y ese es el patrón que se aprende, no la frase
   entera.
-- Se aprende solo cuando la corrección cambió la categoría o el ámbito:
-  corregir un monto o una fecha no enseña "qué es" un gasto.
+- Se aprende solo cuando la corrección cambió la CATEGORÍA: corregir un monto,
+  una fecha o solo el ámbito no enseña "qué es" un gasto. Y solo se aprende de
+  un gasto cuyo ámbito resultante es `"casa"`: un alias aprendido de un gasto
+  `personal` viajaría, vía el prompt, al contexto de la otra persona y de un
+  proveedor de IA externo, indefinidamente. `Alias.scope` sigue en el schema
+  (la base tiene datos reales y no hay razón para migrar) pero ya no se
+  escribe ni se lee — antes también podía enseñar el ámbito, y eso chocaba con
+  la regla de ámbito del prompt: como `Alias` no tiene `userId`, una corrección
+  de una persona marcando algo como "personal" hacía que la otra persona
+  cargara lo mismo como personal también, invisible para quien no lo pagó. Ver
+  la regla de dominio en [CLAUDE.md](../CLAUDE.md).
 - Los aliases inyectados en el prompt (`buildSystemPrompt` en
   `src/lib/ai/parse.ts`, sección "Equivalencias ya conocidas") están acotados a
   un tope (`TOPE_PARA_EL_PROMPT`): la tabla crece sin techo con cada
@@ -232,6 +262,19 @@ que el bot contesta tiene que coincidir con el del dashboard para el mismo mes,
 o uno de los dos pierde toda credibilidad. `resolveConsulta` trae los gastos
 **sin filtro de fecha** (una cuota que vence en el rango puede venir de una
 compra vieja) y recorta con `expensesToCharges`, igual que `stats/route.ts`.
+
+**Existe un recorte a hoy, y las tres métricas lo respetan por igual.**
+`buildConsulta` (`src/lib/ai/parse.ts`) recorta `to` a hoy si la pregunta trae
+una fecha futura: preguntar "cuánto llevamos este mes" el día 10 trae un `to`
+de fin de mes, y la respuesta correcta es "hasta hoy", no un error ni el mes
+completo. `total` y `por_categoria` lo respetaban desde el principio;
+`tendencia` NO lo respetaba (usaba el mes calendario completo para el primer y
+el último mes del rango) hasta que se corrigió — con un gasto cargado a mano
+con fecha posterior a hoy dentro del mes en curso, el mismo bot contestaba dos
+números distintos para el mismo mes según la métrica. Ahora `resolveConsulta`
+intersecta cada mes de la tendencia con `[query.from, query.to]`, así que el
+mes en curso se contesta **hasta hoy, no hasta fin de mes**, en las tres
+métricas por igual.
 
 `resolveConsulta` también materializa los recurrentes de cada mes del rango
 antes de leer (la misma escritura idempotente y acotada que ya disparan los dos
@@ -287,7 +330,15 @@ que entra en la web.
   **Consecuencia, mientras esto no se corrija:** el CSV de un mes NO va a
   coincidir con el total que muestra el dashboard para ese mismo mes (una
   compra en cuotas se exporta entera en el mes de la compra, no repartida por
-  cuota) y **no va a incluir los gastos recurrentes** materializados ese mes
-  (el alquiler, los servicios) porque el export nunca dispara la
-  materialización. Quien exporte para chequear el dashboard va a encontrar
-  una discrepancia real, no un error de tipeo.
+  cuota).
+
+  **Sobre los recurrentes, la afirmación anterior de este documento era falsa
+  en el caso normal.** El export filtra por `date` (no por `source`), y una
+  vez que alguien abrió el dashboard o las stats de ese mes, la
+  materialización YA CREÓ las filas de `Expense` del alquiler y los servicios
+  con fecha día 1 de ese mes — el export las trae como cualquier otra fila,
+  porque no distingue de dónde salió el gasto. El export **nunca dispara** la
+  materialización (eso sigue siendo cierto), pero eso solo importa para un mes
+  que **nadie visitó todavía**: recién ahí el CSV sale corto porque las filas
+  ni siquiera existen. Quien exporte un mes ya visitado va a ver el alquiler
+  en el CSV.
