@@ -144,23 +144,46 @@ export async function POST(req: Request) {
       },
     });
 
-    const sent = await sendMessage(
-      intake.chatId,
-      buildConfirmation({
-        amount: parsed.amount,
-        description: parsed.description,
-        categoryName: parsed.categoryName,
-        scope: parsed.scope,
-        payerName: payer.name,
-        date: parsed.date,
-        anomalous: isAnomalous(parsed.amount, average._avg.amount),
-      })
-    );
+    // El Expense ya esta commiteado en este punto (arriba). Si sendMessage
+    // o el update de botChatId/botMessageId fallan, el gasto queda GUARDADO
+    // pero sin confirmar: no se revierte (revertir un registro financiero
+    // ya guardado por un hipo de Telegram seria peor), pero tampoco se
+    // reintenta aca — un reintento automatico podria mandar dos mensajes si
+    // el primero en realidad llego. Lo que si hay que evitar es que este
+    // estado (guardado, no confirmado) sea indistinguible de un exito en
+    // los logs: el catch generico de mas abajo lo loguea como un error
+    // cualquiera, y el usuario, al no ver respuesta, reenvia el mensaje con
+    // un update_id NUEVO — que ProcessedUpdate no deduplica — duplicando el
+    // gasto. Por eso este bloque tiene su propio catch con un mensaje
+    // especifico y buscable, que nombra el expense.id, el monto y el chatId,
+    // para que un "no me llego nada" se resuelva mirando el log en vez de
+    // adivinando si el gasto existe.
+    try {
+      const sent = await sendMessage(
+        intake.chatId,
+        buildConfirmation({
+          amount: parsed.amount,
+          description: parsed.description,
+          categoryName: parsed.categoryName,
+          scope: parsed.scope,
+          payerName: payer.name,
+          date: parsed.date,
+          anomalous: isAnomalous(parsed.amount, average._avg.amount),
+        })
+      );
 
-    await prisma.expense.update({
-      where: { id: expense.id },
-      data: { botChatId: intake.chatId, botMessageId: String(sent.message_id) },
-    });
+      await prisma.expense.update({
+        where: { id: expense.id },
+        data: { botChatId: intake.chatId, botMessageId: String(sent.message_id) },
+      });
+    } catch (error) {
+      console.error(
+        `GASTO GUARDADO SIN CONFIRMAR: expenseId=${expense.id} amount=${parsed.amount} ` +
+          `chatId=${intake.chatId} — sendMessage o el update posterior fallaron, el Expense ` +
+          `ya esta en la base pero el usuario no recibio la confirmacion.`,
+        error
+      );
+    }
 
     return OK();
   } catch (error) {
