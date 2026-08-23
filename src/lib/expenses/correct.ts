@@ -29,7 +29,16 @@ export type CorrectClient = {
   };
   installment: {
     deleteMany(args: { where: { expenseId: string } }): Promise<unknown>;
-    createMany(args: { data: unknown[] }): Promise<unknown>;
+    // La forma de una fila, no `unknown[]`: el `createMany` real de Prisma
+    // tipa `data` como `Fila | Fila[]` (acepta una sola fila suelta), y un
+    // `unknown[]` no es asignable a esa union porque el miembro no-array no
+    // es un array. Con la forma real de la fila (los mismos campos que
+    // `InstallmentRow` de `installments.ts` mas `expenseId`, el unico shape
+    // que arma `rebuildInstallments` mas abajo) la asignacion estructural
+    // contra el Prisma real cierra sin importar `@prisma/client`.
+    createMany(args: {
+      data: { expenseId: string; installmentNumber: number; dueDate: Date; amount: number }[];
+    }): Promise<unknown>;
   };
 };
 
