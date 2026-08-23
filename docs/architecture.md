@@ -41,7 +41,8 @@ src/
 │   ├── format.ts                # Formato de moneda y fechas
 │   ├── prisma.ts                # Singleton del Prisma client
 │   ├── theme.tsx                # Dark mode
-│   ├── visibility.ts            # Regla de scope: lectura y permiso de edición
+│   ├── visibility.ts            # Regla de scope, permiso de edición y política de membresía
+│   ├── household.ts             # Allowlist de emails → ids de los miembros
 │   ├── telegram/                # Cliente del bot y normalización de updates
 │   ├── ai/                      # AiProvider, parseMessage y el prompt
 │   ├── ocr/                     # OcrEngine y sus backends
@@ -152,8 +153,12 @@ el mismo pipeline que un gasto escrito.
 
 ## Reglas transversales
 
-- **Visibilidad**: toda lectura de gastos pasa por `visibleExpensesWhere()`. Ver
-  las reglas de dominio en [CLAUDE.md](../CLAUDE.md).
+- **Visibilidad**: toda lectura de gastos pasa por `visibleExpensesWhere(userId,
+  householdUserIds)`, y los ids del hogar salen de `getHouseholdUserIds()`
+  (`src/lib/household.ts`), que los deriva de la allowlist `HOUSEHOLD_EMAILS`.
+  Son las **dos mitades** del modelo de privacidad: qué ve un miembro y quién es
+  miembro. `tests/read-paths.test.ts` falla si una ruta de lectura se saltea la
+  regla. Ver las reglas de dominio en [CLAUDE.md](../CLAUDE.md).
 - **Idempotencia**: el webhook inserta `ProcessedUpdate.updateId` **antes** de
   procesar y usa el fallo del índice único como señal de reintento; la
   materialización de recurrentes va por `(recurringExpenseId, recurringPeriod)`.

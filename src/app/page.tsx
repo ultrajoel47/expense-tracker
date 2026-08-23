@@ -7,8 +7,8 @@ export default function Home() {
         <div className="text-6xl mb-4">$</div>
         <h1 className="text-5xl font-bold">Expense Tracker</h1>
         <p className="text-xl text-indigo-100 max-w-md mx-auto">
-          Manda el gasto por Telegram y se carga solo. Escanea comprobantes con OCR y
-          categoriza automaticamente.
+          Manda el gasto por Telegram y se carga solo: monto, fecha y categoria
+          se infieren del mensaje.
         </p>
         <div className="flex gap-4 justify-center pt-4">
           <Link
@@ -27,7 +27,7 @@ export default function Home() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-12 max-w-2xl">
           {[
             ["Bot de Telegram", "Carga un gasto escribiendo"],
-            ["OCR Scan", "Escanea tickets y comprobantes"],
+            ["Cuotas y Tarjetas", "Segui la deuda mes a mes"],
             ["Auto-Categorias", "Clasificacion automatica"],
             ["Reportes CSV", "Exporta tus gastos"],
           ].map(([title, desc]) => (

@@ -8,8 +8,11 @@ Los IDs son ObjectId (`@db.ObjectId`). No hay migrations: se aplica con
 
 ## User
 
-Cuenta de usuario, con password hasheada con bcryptjs. Son **dos** y no hay alta
-pública prevista más allá del registro existente.
+Cuenta de usuario, con password hasheada con bcryptjs. Son **dos**, y el alta NO
+es pública: `POST /api/auth/register` sólo acepta los emails de la allowlist
+`HOUSEHOLD_EMAILS` y devuelve 403 al resto. Esa misma variable define **quién es
+miembro del hogar**, que es la otra mitad de la regla de visibilidad — ver
+`src/lib/household.ts` y el encabezado de `src/lib/visibility.ts`.
 
 - `telegramChatId` — el chat de Telegram vinculado. `null` hasta que la persona
   hace `/start`. Es la whitelist: un update de un chat que no matchea ningún
@@ -56,7 +59,8 @@ El modelo central. Un gasto puntual.
 Índices: `[scope, userId, date]` para las lecturas con visibilidad,
 `[botChatId, botMessageId]` para resolver correcciones por reply, y
 `[recurringExpenseId, recurringPeriod]` para la idempotencia de la
-materialización.
+materialización — este último tiene además una versión **única y parcial** creada
+a mano, ver [Pasos manuales en Mongo](#pasos-manuales-en-mongo).
 
 ## Installment
 
@@ -108,16 +112,33 @@ puede tardar 15-20s en Vercel Hobby: en esa ventana el registro todavía no
 existiría, el reintento pasaría el chequeo y **el gasto se cargaría dos veces**.
 Es justamente el bug que este modelo existe para evitar.
 
+`@@index([processedAt])` está declarado **sólo** para que `db push` no dropee el
+índice TTL que se crea a mano sobre esa misma clave: sin el TTL, esta colección
+crece sin límite para siempre. Ver [Pasos manuales en
+Mongo](#pasos-manuales-en-mongo).
+
 Ver la §6 del [diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).
 
 ## Pasos manuales en Mongo
 
 Cosas que `prisma db push` no puede hacer y hay que hacer a mano en la base.
 
-Las tres son la **misma familia de bug**: en MongoDB un campo ausente se indexa
-como `null`, así que dos documentos a los que les falta el campo colisionan entre
-sí en un índice único plano. Prisma no puede expresar `sparse` ni
-`partialFilterExpression` en el schema, así que el índice se crea a mano.
+Los índices únicos de acá son la **misma familia de bug**: en MongoDB un campo
+ausente se indexa como `null`, así que dos documentos a los que les falta el
+campo colisionan entre sí en un índice único plano. Prisma no puede expresar
+`sparse` ni `partialFilterExpression` en el schema, así que el índice se crea a
+mano.
+
+**Regla que atraviesa las tres secciones, y que se verificó a los golpes:
+`prisma db push` DROPEA todo índice cuya clave no esté declarada en el schema, y
+FALLA si encuentra uno con el nombre que él espera y opciones distintas.** Por
+eso cada índice de abajo dice explícitamente qué nombre tiene que tener y por
+qué. Los tres sobreviven a `db push` con los nombres que están acá, verificado en
+tres pushes consecutivos (`already in sync`, sin cambios en `getIndexes()`).
+
+Los tres están **ya aplicados** a la base de producción (2026-08-23). Lo que
+sigue es el procedimiento para una base nueva, y la referencia para cuando algo
+se rompa.
 
 ### Índices únicos sparse en User (OBLIGATORIO — la app se rompe sin esto)
 
@@ -231,18 +252,140 @@ Aplica a los dos campos de `User` con índice sparse (`telegramChatId` y
 `telegramLinkCode`) y a cualquier otro campo `@unique` que se agregue más
 adelante.
 
-### Índice TTL en ProcessedUpdate
+### Índice TTL en ProcessedUpdate (OBLIGATORIO — sin esto la tabla crece sin límite)
 
-`processedAt` con TTL, para que la tabla de idempotencia no crezca sin límite.
+`ProcessedUpdate` es la tabla de idempotencia del webhook: **una fila por cada
+update de Telegram, para siempre**. Nada la borra desde el código, a propósito —
+borrar filas a mano reabre la ventana de duplicados. El TTL es lo único que la
+acota.
 
-### Índice único parcial en Expense
+**`expireAfterSeconds: 604800` (7 días).** La ventana que hay que cubrir es la de
+reintentos de Telegram, que se mide en minutos y a lo sumo horas: pasado eso
+Telegram abandona el update y ya no hay nada que deduplicar. 7 días deja un
+margen enorme para mirar un incidente a mano y no cuesta nada en volumen (una
+fila de ~100 bytes por update).
 
-Sobre `(recurringExpenseId, recurringPeriod)`, con un
-`partialFilterExpression` que excluya los documentos donde `recurringExpenseId`
-es `null` — si no, todos los gastos que no vienen de un recurrente colisionan
-entre sí, que es exactamente el mismo problema que en `User`. Sirve para que la
-materialización de recurrentes sea idempotente a nivel base y no sólo a nivel
-código. El índice que crea `db push` es no-único.
+**El índice tiene que llamarse `ProcessedUpdate_processedAt_idx`**, que es
+exactamente el nombre que Prisma genera para el `@@index([processedAt])` que está
+declarado en el schema. Las dos mitades de esa frase son necesarias, y las dos se
+descubrieron rompiéndolo:
+
+- **Sin `@@index([processedAt])` en el schema**, el TTL desaparece en el próximo
+  `db push`, con este plan y sin ninguna advertencia:
+
+  ```
+  Applying the following changes:
+  [-] Index `ProcessedUpdate_processedAt_ttl`
+  ```
+
+  Un índice dropeado en silencio es el peor resultado posible acá: la app sigue
+  andando igual y la tabla vuelve a crecer sin límite sin que nada avise.
+
+- **Con el `@@index` declarado pero el TTL con OTRO nombre**, Prisma crea su
+  índice plano sobre la misma clave y MongoDB después rechaza el TTL con el
+  código **85 (`IndexOptionsConflict`)**: «An equivalent index already exists
+  with a different name and options». No se puede tener el plano y el TTL sobre
+  la misma clave.
+
+Con el nombre correcto pasa lo mismo que con los sparse de `User`: Prisma ve un
+índice con el nombre y las claves que espera, no lo lista como cambio pendiente y
+`db push` reporta `already in sync`.
+
+```js
+// Correr en mongosh, sobre la base de la app.
+try {
+  db.ProcessedUpdate.dropIndex("ProcessedUpdate_processedAt_idx");
+  print("dropeado ProcessedUpdate_processedAt_idx");
+} catch (e) {
+  if (e.code === 27) {            // IndexNotFound: todavia no existia, todo bien
+    print("ProcessedUpdate_processedAt_idx no existia");
+  } else {
+    throw e;                      // cualquier otra cosa NO se ignora
+  }
+}
+
+db.ProcessedUpdate.createIndexes([
+  {
+    key: { processedAt: 1 },
+    name: "ProcessedUpdate_processedAt_idx",   // el nombre que espera Prisma
+    expireAfterSeconds: 604800,                // 7 dias
+  },
+]);
+
+// Control: tiene que salir con expireAfterSeconds: 604800.
+db.ProcessedUpdate.getIndexes();
+```
+
+**Cuándo hay que crearlo:** antes de poner el bot en producción. Si falta no
+rompe nada —la idempotencia funciona igual— así que no hay ningún síntoma hasta
+que la colección es enorme. Es exactamente el tipo de cosa que no se descubre a
+tiempo.
+
+### Índice único parcial en Expense (OBLIGATORIO antes de materializar recurrentes)
+
+Sobre `(recurringExpenseId, recurringPeriod)`, para que la materialización de
+recurrentes sea idempotente **a nivel base** y no sólo a nivel código: garantiza
+un solo alquiler por mes aunque el job corra dos veces en paralelo. El índice que
+crea `db push` es no-único, así que por sí solo no garantiza nada.
+
+Necesita `partialFilterExpression` por la misma razón que los sparse de `User`:
+si fuera un único plano, **los 386 gastos que no vienen de un recurrente
+colisionan entre sí**, porque a todos les falta `recurringExpenseId` y MongoDB
+los indexa a todos como `null`.
+
+**El filtro va con `$exists: true`, NO con `$type: "objectId"`.** Los dos
+funcionan en Mongo, pero `$type` deja el índice **imposible de inspeccionar desde
+Prisma**: `$runCommandRaw({ listIndexes: "Expense" })` explota con
+`Error: Unknown tagged value`, porque Prisma reserva `$type` para su propia
+codificación de valores. O sea: el índice queda bien creado, y la herramienta con
+la que se revisa todo lo demás deja de servir para verlo. Con `$exists: true`
+alcanza, porque la regla de la sección anterior ya prohíbe escribir `null`
+explícitos (verificado: hoy los 386 gastos tienen el campo **ausente**, ninguno
+en `null`).
+
+**El índice tiene que llamarse distinto del que genera Prisma**
+(`Expense_recurringExpenseId_recurringPeriod_idx`). Acá el truco de los sparse de
+`User` **no** funciona, porque el schema declara ese índice como `@@index` (no
+único) y el de la base es único y parcial: con el nombre de Prisma, `db push`
+falla en seco y no aplica nada:
+
+```
+Error: MongoDB error
+Kind: Command failed: Error code 86 (IndexKeySpecsConflict): An existing index
+has the same name as the requested index.
+```
+
+Con un nombre propio, `db push` crea su índice plano al lado y **deja el parcial
+intacto** (verificado en tres pushes consecutivos). El costo es un índice plano
+redundante sobre la misma clave, que en esta colección no se nota.
+
+```js
+// Correr en mongosh, sobre la base de la app.
+try {
+  db.Expense.dropIndex("Expense_recurring_period_unique_partial");
+  print("dropeado Expense_recurring_period_unique_partial");
+} catch (e) {
+  if (e.code === 27) {            // IndexNotFound
+    print("Expense_recurring_period_unique_partial no existia");
+  } else {
+    throw e;
+  }
+}
+
+db.Expense.createIndexes([
+  {
+    key: { recurringExpenseId: 1, recurringPeriod: 1 },
+    // NO usar Expense_recurringExpenseId_recurringPeriod_idx: ese nombre lo
+    // espera Prisma para el @@index no-unico y `db push` falla con el 86.
+    name: "Expense_recurring_period_unique_partial",
+    unique: true,
+    partialFilterExpression: { recurringExpenseId: { $exists: true } },
+  },
+]);
+
+// Control: unique:true y el partialFilterExpression con $exists.
+db.Expense.getIndexes();
+```
 
 ## Modelos que existieron y ya no
 

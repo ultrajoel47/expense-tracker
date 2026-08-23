@@ -19,13 +19,21 @@
  * sobreescribe un documento que ya tiene el campo. Correrlo dos veces no
  * cambia nada la segunda vez.
  *
- * Correr:  node --env-file=.env scripts/backfill-rebanada1.ts
+ * MIGRACION DE UNA SOLA VEZ, YA APLICADA EL 2026-08-22 a la base de produccion.
+ * NO correr contra una base nueva ni vacia: los EXPECTED_COUNTS de abajo son los
+ * de esa base concreta (386 gastos, 66 cuotas, 2 usuarios...) y el script aborta
+ * si no coinciden, pero antes de abortar ya dropeo colecciones. Queda en el repo
+ * como registro de la migracion y como referencia de la forma vieja de los
+ * documentos, no como un paso de setup.
+ *
+ * Correr (solo si se sabe exactamente por que):
+ *   node --env-file=.env scripts/backfill-rebanada1.ts
  */
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-/** Colecciones de los 6 modelos que salen del schema. Se dropean al final. */
+/** Colecciones de los 8 modelos que salen del schema. Se dropean al final. */
 const ORPHAN_COLLECTIONS = [
   "MonthlyIncome",
   "Group",

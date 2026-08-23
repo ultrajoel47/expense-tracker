@@ -136,4 +136,10 @@ model ProcessedUpdate {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   updateId    String   @unique // update_id de Telegram, como string
   processedAt DateTime @default(now())
+
+  // Declarado para que `db push` NO borre el indice TTL que se crea a mano
+  // sobre esta misma clave: push dropea todo indice cuya clave no esta en el
+  // schema, y sin el TTL la tabla de idempotencia crece sin limite. Ver
+  // docs/data-models.md#pasos-manuales-en-mongo.
+  @@index([processedAt])
 }

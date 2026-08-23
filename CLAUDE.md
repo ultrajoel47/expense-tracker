@@ -41,6 +41,11 @@ hablen de eso, es residuo: reportalo.
 - Toda variable obligatoria se lee con `requireEnv(name)` de `src/lib/env.ts`,
   nunca con `process.env.X || "default"`.
 - La plantilla de todas las variables está en `.env.example`.
+- **`HOUSEHOLD_EMAILS`** es la allowlist de emails habilitados a tener cuenta, y
+  es la **fuente única de verdad de quién es miembro del hogar**. Sin definir,
+  falla **cerrado** en producción (nadie se registra, nadie ve los gastos de
+  casa) y abre fuera de producción para no romper el dev local. Ver
+  `src/lib/household.ts`.
 
 ### Prisma / MongoDB
 - Provider: MongoDB. No usar `prisma migrate` — usar `npx prisma db push`
@@ -73,18 +78,27 @@ hablen de eso, es residuo: reportalo.
 2. **`Expense.createdById` es quién lo registró.** Puede diferir del pagador
    (una persona carga un gasto que pagó la otra). No es redundante con `userId`:
    es lo que permite resolver "mi último gasto" para corregirlo.
-3. **`Expense.scope` es `"casa"` o `"personal"`.** Los de casa los ven los dos;
-   los personales los ve únicamente quien pagó. La lectura se resuelve
-   **siempre** con `visibleExpensesWhere()` de `src/lib/visibility.ts`; nunca con
-   `userId: session.id` a mano. Que un gasto personal se filtre a las consultas
-   de la otra persona es el peor fallo posible de este sistema.
-4. **El permiso de edición vía bot es más amplio que la lectura** y vive en
+3. **`Expense.scope` es `"casa"` o `"personal"`.** Los de casa los ven los dos
+   **miembros del hogar**; los personales los ve únicamente quien pagó. La
+   lectura se resuelve **siempre** con `visibleExpensesWhere(session.id,
+   householdUserIds)` de `src/lib/visibility.ts`; nunca con `userId: session.id`
+   a mano (hay un test que lo verifica: `tests/read-paths.test.ts`). Que un gasto
+   personal se filtre a las consultas de la otra persona es el peor fallo posible
+   de este sistema.
+4. **La privacidad tiene DOS mitades y las dos son obligatorias:** qué ve un
+   miembro (`visibleExpensesWhere`) y **quién es miembro**
+   (`HOUSEHOLD_EMAILS` → `getHouseholdUserIds()` de `src/lib/household.ts`). La
+   rama de `scope: "casa"` **nunca** puede quedar sin predicado de identidad:
+   sin los ids del hogar, cualquiera que se registrara leía —y podía borrar— el
+   historial financiero completo. Los ids los pasa el llamador porque
+   `visibility.ts` es un módulo puro y sincrónico que se testea sin base.
+5. **El permiso de edición vía bot es más amplio que la lectura** y vive en
    `canEditViaBot()`. Quien registró un gasto puede corregirlo desde el mensaje
    de confirmación de su chat aunque no pueda verlo en la web. **No unificar las
    dos funciones**: si se usa el permiso de edición para leer, se filtran gastos
    personales; si se usa el de lectura para editar, nadie puede arreglar lo que
    acaba de cargar mal.
-5. **La ingesta principal es el bot de Telegram. La web es lectura y
+6. **La ingesta principal es el bot de Telegram. La web es lectura y
    corrección.** Los formularios de alta se mantienen como escape hatch (cargar
    algo viejo, o si el bot está caído), pero no son el camino principal.
 
@@ -100,7 +114,8 @@ hablen de eso, es residuo: reportalo.
 | Propósito | Archivo |
 |-----------|---------|
 | Schema DB | `prisma/schema.prisma` |
-| Regla de visibilidad y permiso de edición | `src/lib/visibility.ts` |
+| Regla de visibilidad, permiso de edición y política de membresía | `src/lib/visibility.ts` |
+| Miembros del hogar (allowlist → ids) | `src/lib/household.ts` |
 | Sesión y JWT | `src/lib/auth.ts` |
 | Variables de entorno obligatorias | `src/lib/env.ts` |
 | Singleton de Prisma | `src/lib/prisma.ts` |

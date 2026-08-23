@@ -193,16 +193,49 @@ model ProcessedUpdate {
 
 ## 5. Regla de visibilidad
 
+> **Enmienda (2026-08-23) — esta sección tenía un agujero de seguridad.**
+>
+> Lo de abajo especifica **qué ve un miembro del hogar** y no especificaba nada
+> sobre **quién es miembro**. La rama `{ scope: "casa" }` no tiene ningún
+> predicado de identidad, y `POST /api/auth/register` quedó abierto: implementado
+> tal cual, cualquiera que se registrara en el dominio público leía los 386
+> gastos, el dashboard, el CSV y los emails de los dos, y podía **editar y
+> borrar** el historial (el DELETE/PUT usan la misma regla). Antes de esta rama
+> los filtros eran `userId: session.id`, así que un desconocido veía una app
+> vacía: la regla "mejor" era una **regresión** de privacidad.
+>
+> El modelo de privacidad tiene **dos mitades** y las dos son parte del diseño:
+>
+> 1. **Qué ve un miembro** — lo de esta sección.
+> 2. **Quién es miembro** — la allowlist de emails `HOUSEHOLD_EMAILS`, que es la
+>    fuente única de verdad: cierra el registro (403 al resto) y de ella se
+>    derivan los ids con los que se acota la rama de `casa`. Sin definir, falla
+>    **cerrado** en producción y abre fuera de producción, para no romper el dev
+>    local. No hay flag en la base a propósito: sería un segundo lugar donde vive
+>    la misma verdad.
+>
+> La firma real quedó `visibleExpensesWhere(userId, householdUserIds)`, con los
+> ids pasados por el llamador para que `visibility.ts` siga siendo un módulo
+> puro y sincrónico, testeable sin base. La rama de casa queda acotada por los
+> **dos** extremos: el lector tiene que ser miembro, y el pagador también.
+>
+> Ver `src/lib/household.ts`, `src/lib/visibility.ts`, `tests/visibility.test.ts`
+> y `tests/read-paths.test.ts`.
+
 Tres ámbitos: los gastos personales de cada uno son privados, los de la casa son
 compartidos.
 
 ```ts
-// src/lib/visibility.ts
-export function visibleExpensesWhere(userId: string) {
+// src/lib/visibility.ts — forma final, con las dos mitades
+export function visibleExpensesWhere(userId: string, householdUserIds: readonly string[]) {
+  const own = { scope: "personal", userId };          // userId = quién pagó
+  if (!householdUserIds.includes(userId)) {
+    return { OR: [own] };                            // no es del hogar: no ve nada de casa
+  }
   return {
     OR: [
-      { scope: "casa" },
-      { scope: "personal", userId },   // userId = quién pagó
+      { scope: "casa", userId: { in: [...householdUserIds] } },
+      own,
     ],
   };
 }
@@ -539,21 +572,34 @@ historial, adaptados al schema nuevo.
 ```
 DATABASE_URL
 JWT_SECRET                  # obligatorio, ver abajo
+HOUSEHOLD_EMAILS            # allowlist del hogar, ver la enmienda de la §5
 TELEGRAM_BOT_TOKEN
 TELEGRAM_WEBHOOK_SECRET     # el secret token del header
 XAI_API_KEY
 OCR_ENGINE                  # "wasm" | "native"
 ```
 
+**`HOUSEHOLD_EMAILS` es obligatoria en producción** (agregada por la enmienda de
+la §5): es la allowlist de emails habilitados a registrarse y la fuente de la que
+salen los miembros del hogar. Sin definir falla cerrado en producción y abre
+fuera de producción.
+
 **`JWT_SECRET` pasa a ser obligatorio.** Hoy `src/lib/auth.ts:4` tiene el
 fallback `"expense-tracker-secret-demo-key"`. Con la app en un dominio público,
 un secret conocido permite forjar sesiones. La app debe fallar al arrancar si
 falta.
 
-Pasos manuales de setup en Mongo, documentados:
+Pasos manuales de setup en Mongo, documentados (comandos exactos, nombres de
+índice y por qué esos nombres, en
+[docs/data-models.md](../../data-models.md#pasos-manuales-en-mongo)):
 
-- Índice TTL sobre `ProcessedUpdate.processedAt`.
-- Índice único parcial sobre `Expense (recurringExpenseId, recurringPeriod)`.
+- Índices únicos **sparse** sobre `User.telegramChatId` y `User.telegramLinkCode`.
+- Índice **TTL** sobre `ProcessedUpdate.processedAt` (7 días).
+- Índice único **parcial** sobre `Expense (recurringExpenseId, recurringPeriod)`.
+
+Y el registro del webhook en producción con `setWebhook` + `secret_token`, en el
+[README](../../../README.md#deploy): sin ese paso el bot desplegado no recibe
+nada, y sin el `secret_token` recibe todo y contesta 401 a cada update.
 
 ## 13. Testing
 

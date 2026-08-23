@@ -1990,7 +1990,9 @@ git commit -m "feat: registra gastos de texto desde Telegram de punta a punta"
 - [ ] `npm run build` sin errores.
 - [ ] `npx tsc --noEmit` sin errores.
 - [ ] `grep -rn 'expenseShare\|recurringShare\|periodShare\|monthlyIncome\|prisma.budget\|prisma.group' src/` sin resultados.
-- [ ] `grep -rn 'userId: session.id' src/app/api/expenses/` sin resultados en las lecturas (la escritura sí lo usa).
+- [x] Ese chequeo ya no es un grep a mano: lo hace `tests/read-paths.test.ts`, que
+  corre en `npm test` y falla si una lectura de Expense/RecurringExpense filtra
+  por `userId: session.id` fuera de la allowlist documentada.
 - [ ] Mandar `12 lucas panaderia` al bot y ver el gasto en `/dashboard/expenses`.
 - [ ] Un gasto `personal` de una persona no aparece en el listado de la otra.
 - [ ] `CLAUDE.md` no menciona grupos, splits, sueldos ni balance.
