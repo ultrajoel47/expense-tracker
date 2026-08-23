@@ -5,6 +5,7 @@ import {
   periodKey,
   esPeriodoMaterializable,
   PRIMER_PERIODO_MATERIALIZABLE,
+  FRECUENCIAS_MATERIALIZABLES,
 } from "../src/lib/recurring-materialize.ts";
 
 function clienteFalso(plantillas: any[], yaExistentes: string[] = []) {
@@ -260,4 +261,27 @@ test("01/09 02:00 UTC (23:00 del 31/08 en Buenos Aires, todavia agosto alla) tam
   const hoy = new Date("2026-09-01T02:00:00Z");
   assert.equal(esPeriodoMaterializable(2026, 9, hoy), false);
   assert.equal(esPeriodoMaterializable(2026, 8, hoy), true);
+});
+
+// ─── FRECUENCIAS_MATERIALIZABLES: fuente unica con el `where` del motor ─────
+
+test("FRECUENCIAS_MATERIALIZABLES es hoy solo MONTHLY", () => {
+  assert.deepEqual([...FRECUENCIAS_MATERIALIZABLES], ["MONTHLY"]);
+});
+
+test("materializeRecurringForMonth filtra por FRECUENCIAS_MATERIALIZABLES, no por un literal aparte", async () => {
+  let whereRecibido: any = null;
+  const client = {
+    recurringExpense: {
+      findMany: async (args: any) => {
+        whereRecibido = args.where;
+        return [];
+      },
+    },
+    $transaction: async (fn: any) => fn({ expense: { findFirst: async () => null, create: async () => ({}) } }),
+  };
+
+  await materializeRecurringForMonth(client as any, 2026, 8);
+
+  assert.deepEqual(whereRecibido.frequency, { in: [...FRECUENCIAS_MATERIALIZABLES] });
 });

@@ -31,6 +31,25 @@ export function periodKey(year: number, month: number): string {
 }
 
 /**
+ * Las unicas `frequency` de `RecurringExpense` que este modulo materializa.
+ *
+ * Unica fuente de verdad: la usa el `where` de `materializeRecurringForMonth`
+ * de abajo, y la consumen (importandola) las rutas de API que crean/editan
+ * plantillas para rechazar cualquier otra frecuencia con 400 antes de
+ * guardarla. Sin esa validacion, una plantilla `WEEKLY` se acepta, se lista y
+ * aparece en "proximos recurrentes" — pero no entra en NINGUN total, nunca,
+ * porque este modulo solo materializa `MONTHLY`. Es el mismo sub-conteo
+ * silencioso que el resto de esta rebanada existe para cerrar.
+ *
+ * `RecurringExpense.frequency` en el schema admite `DAILY` / `WEEKLY` /
+ * `MONTHLY` / `YEARLY`, pero hoy solo `MONTHLY` tiene logica de
+ * materializacion. Vive aca (modulo puro) y no en las rutas porque las rutas
+ * son las que tienen que estar de acuerdo con el motor, no al reves: si este
+ * modulo aprende a materializar otra frecuencia, las rutas la aceptan solas.
+ */
+export const FRECUENCIAS_MATERIALIZABLES = ["MONTHLY"] as const;
+
+/**
  * Primer mes que esta funcionalidad puede materializar, como clave de periodo.
  *
  * POR QUE UN MES FIJO Y NO `plantilla.createdAt`: las 10 plantillas reales se
@@ -169,7 +188,7 @@ export async function materializeRecurringForMonth(
   const finDelMes = new Date(Date.UTC(year, month, 1));
 
   const plantillas = await client.recurringExpense.findMany({
-    where: { active: true, frequency: "MONTHLY" },
+    where: { active: true, frequency: { in: [...FRECUENCIAS_MATERIALIZABLES] } },
   });
 
   let creados = 0;
