@@ -1,5 +1,5 @@
-import { requireEnv } from "@/lib/env";
-import type { AiProvider } from "./parse";
+import { requireEnv } from "../env.ts";
+import type { AiProvider } from "./parse.ts";
 
 export function createGrokProvider(): AiProvider {
   return {
