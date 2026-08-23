@@ -28,6 +28,7 @@ import {
 import { getHouseholdUserIds } from "@/lib/household";
 import { buildInstallments } from "@/lib/expenses/installments";
 import { canEditViaBot } from "@/lib/visibility";
+import { escapeHtml } from "@/lib/format";
 
 const OK = () => NextResponse.json({ ok: true });
 const UNAUTHORIZED = () => NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -107,7 +108,24 @@ async function handleStart(intake: Intake, householdUserIds: string[]): Promise<
     throw error;
   }
 
-  await sendMessage(intake.chatId, `Listo ${user.name}, ya podes mandarme gastos.`);
+  // Propio try/catch, misma forma que el que la ola A le puso a
+  // `applyTextCorrection`: la vinculacion de arriba YA se aplico (el chat
+  // quedo vinculado), asi que si el aviso de abajo tira, el catch generico de
+  // la Region 2 ("No pude registrar el gasto... no quedo guardado nada:
+  // reenviame el mensaje") seria FALSO dos veces — habla de un gasto que nunca
+  // existio, y dice que no se guardo nada cuando la vinculacion si se guardo.
+  // El daño de no distinguirlo es acotado (reenviar `/start <codigo>` choca
+  // con que el codigo ya se uso, asi que no duplica nada), pero el mensaje
+  // mentiria igual.
+  try {
+    await sendMessage(intake.chatId, `Listo ${escapeHtml(user.name)}, ya podes mandarme gastos.`);
+  } catch (error) {
+    console.error(
+      `Chat vinculado SIN CONFIRMAR: userId=${user.id} chatId=${intake.chatId} — la vinculacion ` +
+        "SI se aplico, solo fallo avisarle a la persona.",
+      error
+    );
+  }
   return true;
 }
 
@@ -175,7 +193,18 @@ async function handleTextMessage(
     // para no importar `@prisma/client`; el tipo REAL de Prisma es generico
     // sobre los `args` de cada llamada puntual, asi que TypeScript no puede
     // verificar la asignabilidad del CLIENTE completo sin ver esa llamada.
-    const answer = await resolveConsulta(prisma as never, parsed.query, user.id, householdUserIds);
+    const answer = await resolveConsulta(
+      prisma as never,
+      parsed.query,
+      user.id,
+      householdUserIds,
+      (error) =>
+        console.error(
+          "No se pudo materializar un recurrente durante una consulta: la respuesta se sirve " +
+            "igual con lo que ya este materializado, pero puede faltarle el recurrente de ese mes.",
+          error
+        )
+    );
     await sendMessage(intake.chatId, formatConsultaAnswer(answer, parsed.query));
     return null;
   }
@@ -184,7 +213,7 @@ async function handleTextMessage(
     await sendMessage(
       intake.chatId,
       parsed.reason
-        ? `No puedo responder eso: ${parsed.reason}.`
+        ? `No puedo responder eso: ${escapeHtml(parsed.reason)}.`
         : "Todavia no puedo responder preguntas sobre los gastos. Mira el dashboard en la web."
     );
     return null;
@@ -195,7 +224,7 @@ async function handleTextMessage(
   }
 
   if (parsed.intent !== "gasto") {
-    await sendMessage(intake.chatId, `No lo pude registrar: ${parsed.reason}`);
+    await sendMessage(intake.chatId, `No lo pude registrar: ${escapeHtml(parsed.reason)}`);
     return null;
   }
 
@@ -277,7 +306,6 @@ async function applyTextCorrection(
         categoryId: corrected.categoryId,
         scope: corrected.scope,
         cambioLaCategoria: corrected.categoryId !== expense.categoryId,
-        cambioElAmbito: corrected.scope !== expense.scope,
       },
       (error) =>
         console.error(
@@ -353,7 +381,13 @@ async function buildCorrectedConfirmation(
   const expenseId = antes.id;
   const [average, cardRow] = await Promise.all([
     prisma.expense.aggregate({
-      where: { categoryId: corrected.categoryId },
+      // Excluye el propio gasto: este promedio corre DESPUES del `update` de la
+      // correccion, asi que sin este `id` el gasto recien corregido queda
+      // adentro de su propio promedio y se diluye a si mismo. En una categoria
+      // con pocos gastos eso practicamente anula la senal de monto anomalo
+      // justo donde mas hace falta: en una correccion, un dedo gordo ("500
+      // lucas" en vez de "50") es mas facil que en un alta.
+      where: { categoryId: corrected.categoryId, id: { not: expenseId } },
       _avg: { amount: true },
     }),
     prisma.expense.findFirst({
@@ -430,9 +464,12 @@ async function registerExpense(
         ? `no existe la categoria de respaldo "${FALLBACK_CATEGORY}"`
         : `no encontre la categoria "${parsed.categoryName}" ni la de respaldo "${FALLBACK_CATEGORY}"`;
     console.error(`El gasto no se pudo registrar: ${detalle}.`);
+    // `detalle` va tal cual al log (arriba) pero ESCAPADO al mensaje de Telegram:
+    // `parsed.categoryName` puede ser una categoria creada en la web con un
+    // caracter de HTML (ej. "Casa & Jardin").
     await sendMessage(
       intake.chatId,
-      `No lo pude registrar: ${detalle}. Creala en la web y proba de nuevo.`
+      `No lo pude registrar: ${escapeHtml(detalle)}. Creala en la web y proba de nuevo.`
     );
     return null;
   }
@@ -660,7 +697,6 @@ async function handleCallback(
             categoryId: corrected.categoryId,
             scope: corrected.scope,
             cambioLaCategoria: corrected.categoryId !== expense.categoryId,
-            cambioElAmbito: corrected.scope !== expense.scope,
           },
           (error) =>
             console.error(
@@ -716,7 +752,6 @@ async function handleCallback(
             categoryId: corrected.categoryId,
             scope: corrected.scope,
             cambioLaCategoria: corrected.categoryId !== expense.categoryId,
-            cambioElAmbito: corrected.scope !== expense.scope,
           },
           (error) =>
             console.error(
@@ -754,7 +789,7 @@ async function handleCallback(
           await editMessageText(
             intake.chatId,
             intake.callbackMessageId,
-            `🗑 Borrado: ${expense.description}`
+            `🗑 Borrado: ${escapeHtml(expense.description)}`
           );
         }
         await acusar("Borrado.");

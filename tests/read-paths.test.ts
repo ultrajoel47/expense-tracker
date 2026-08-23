@@ -97,10 +97,12 @@ const NO_VISIBILITY_ALLOWLIST: Record<string, { motivo: string; llamadas: string
       "la categoria para la señal de monto anomalo (uno en `registerExpense`, " +
       "otro en `buildCorrectedConfirmation`): el promedio es del hogar, no el " +
       "de quien escribe. Identificadas por su propio `where` (`categoryId: " +
-      "category.id` y `categoryId: corrected.categoryId`) en vez del " +
-      "generico `_avg: { amount: true }` — ese fragmento por si solo eximiria " +
-      "a un tercer `aggregate` cualquiera con esa forma, sin que nadie lo " +
-      "decida. (3) El `findFirst` de `handleCallback`: la puerta de la " +
+      "category.id` y `categoryId: corrected.categoryId, id: { not: expenseId " +
+      "}` — este ultimo excluye el propio gasto para que una correccion no se " +
+      "diluya a si misma en su propio promedio) en vez del generico `_avg: { " +
+      "amount: true }` — ese fragmento por si solo eximiria a un tercer " +
+      "`aggregate` cualquiera con esa forma, sin que nadie lo decida. (3) El " +
+      "`findFirst` de `handleCallback`: la puerta de la " +
       "edicion por bot es `canEditViaBot`, y es MAS ESTRICTA que la " +
       "visibilidad — exige haber pagado o cargado el gasto, no solo poder " +
       "verlo. Filtrar tambien por visibilidad ahi cancela la Regla de Dominio " +
@@ -111,7 +113,7 @@ const NO_VISIBILITY_ALLOWLIST: Record<string, { motivo: string; llamadas: string
       "de llegar aca).",
     llamadas: [
       "where: { categoryId: category.id }",
-      "where: { categoryId: corrected.categoryId }",
+      "where: { categoryId: corrected.categoryId, id: { not: expenseId } }",
       "where: { id: action.expenseId }",
       "select: { creditCard: { select: { name: true } } }",
     ],
