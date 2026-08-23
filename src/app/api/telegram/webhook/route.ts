@@ -3,13 +3,27 @@ import { prisma } from "@/lib/prisma";
 import { requireEnv } from "@/lib/env";
 import { toIntake, type Intake } from "@/lib/telegram/intake";
 import { claimUpdate, isDuplicateKeyError } from "@/lib/idempotency";
-import { sendMessage } from "@/lib/telegram/client";
+import { sendMessage, editMessageText, editMessageReplyMarkup, answerCallbackQuery } from "@/lib/telegram/client";
+import {
+  parseCallbackData,
+  buildExpenseKeyboard,
+  buildCategoryKeyboard,
+  buildDeleteConfirmKeyboard,
+} from "@/lib/telegram/callbacks";
 import { FALLBACK_CATEGORY, parseMessage } from "@/lib/ai/parse";
 import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
+import type { GastoResult, CorreccionPatch } from "@/lib/ai/types";
 import { buildConfirmation, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
+import {
+  resolveCorrectionTarget,
+  applyCorrection,
+  deleteExpenseWithInstallments,
+  type CorrectedExpense,
+} from "@/lib/expenses/correct";
 import { getHouseholdUserIds } from "@/lib/household";
 import { buildInstallments } from "@/lib/expenses/installments";
+import { visibleExpensesWhere, canEditViaBot } from "@/lib/visibility";
 
 const OK = () => NextResponse.json({ ok: true });
 const UNAUTHORIZED = () => NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -32,6 +46,8 @@ const INSTRUCCIONES_VINCULACION =
 type Registered = {
   expenseId: string;
   amount: number;
+  /** Lo necesita el teclado: el boton de scope ofrece ir al OPUESTO. */
+  scope: string;
   confirmation: string;
 };
 
@@ -92,14 +108,13 @@ async function handleStart(intake: Intake, householdUserIds: string[]): Promise<
 }
 
 /**
- * Parsea el texto y crea el Expense. Devuelve `null` cuando el update ya quedo
- * contestado sin crear nada (no era un gasto, falta la categoria de respaldo).
+ * Carga el contexto, parsea, y despacha al camino que corresponda.
  *
- * Todo lo que hace esta funcion menos la ultima escritura vive en la Region 2:
- * si algo tira antes del `expense.create`, NADA quedo escrito y es seguro
- * pedirle a la persona que reenvie.
+ * Todo lo que pasa aca adentro menos las escrituras de `registerExpense` y
+ * `applyTextCorrection` vive en la Region 2: si algo tira antes, NADA quedo
+ * escrito y es seguro pedir un reenvio.
  */
-async function registerExpense(
+async function handleTextMessage(
   intake: Intake & { text: string },
   user: { id: string; name: string },
   householdUserIds: string[]
@@ -135,11 +150,135 @@ async function registerExpense(
     return null;
   }
 
+  if (parsed.intent === "correccion") {
+    return applyTextCorrection(intake, user, parsed.patch, categories, members);
+  }
+
   if (parsed.intent !== "gasto") {
     await sendMessage(intake.chatId, `No lo pude registrar: ${parsed.reason}`);
     return null;
   }
 
+  return registerExpense(intake, user, parsed, categories, members);
+}
+
+/**
+ * Una correccion por texto libre. Devuelve un `Registered` como el alta, asi
+ * que la Region 3 la confirma con el mismo codigo: un mensaje nuevo con
+ * teclado, y el puntero `botChatId`/`botMessageId` movido a ese mensaje.
+ *
+ * **La confirmacion vieja NO se reescribe.** Mandar un mensaje nuevo la deja
+ * con el texto de antes, que es como funciona cualquier chat: los mensajes
+ * viejos son viejos. Sus botones siguen siendo seguros porque llevan el
+ * objetivo explicito (ver `src/lib/telegram/callbacks.ts`): el boton de scope
+ * de un mensaje viejo escribe el valor que ese boton dice, no una inversion
+ * del estado actual. Y el puntero se mueve al mensaje nuevo, asi que responder
+ * al ultimo es lo que resuelve.
+ */
+async function applyTextCorrection(
+  intake: Intake & { text: string },
+  user: { id: string; name: string },
+  patch: CorreccionPatch,
+  categories: { id: string; name: string }[],
+  members: { id: string; name: string }[]
+): Promise<Registered | null> {
+  const target = await resolveCorrectionTarget(
+    prisma,
+    user.id,
+    intake.chatId,
+    intake.replyToMessageId
+  );
+
+  if (!target.expense) {
+    await sendMessage(
+      intake.chatId,
+      target.reason === "reply_desconocido"
+        ? "No encuentro el gasto de ese mensaje. Proba respondiendo a una confirmacion mia, o cargalo de nuevo."
+        : "Todavia no cargaste ningun gasto, asi que no tengo nada que corregir."
+    );
+    return null;
+  }
+
+  const expense = target.expense;
+
+  if (!canEditViaBot(expense, user.id)) {
+    await sendMessage(
+      intake.chatId,
+      "Ese gasto no lo pagaste ni lo cargaste vos, asi que no lo puedo cambiar."
+    );
+    return null;
+  }
+
+  const corrected = await applyCorrection(prisma, expense, patch, categories);
+
+  return {
+    expenseId: expense.id,
+    amount: corrected.amount,
+    scope: corrected.scope,
+    confirmation: await buildCorrectedConfirmation(
+      expense.id,
+      expense.userId,
+      corrected,
+      categories,
+      members
+    ),
+  };
+}
+
+/**
+ * El texto de confirmacion de un gasto ya corregido.
+ *
+ * Se relee la tarjeta con una consulta propia en vez de arrastrarla: el tipo
+ * `CorrectableExpense` no la declara, y omitirla del mensaje diria que el gasto
+ * no tiene tarjeta cuando si la tiene — justo el dato que decide si entra en la
+ * deuda de tarjetas del dashboard.
+ */
+async function buildCorrectedConfirmation(
+  expenseId: string,
+  payerId: string,
+  corrected: CorrectedExpense,
+  categories: { id: string; name: string }[],
+  members: { id: string; name: string }[]
+): Promise<string> {
+  const [average, cardRow] = await Promise.all([
+    prisma.expense.aggregate({
+      where: { categoryId: corrected.categoryId },
+      _avg: { amount: true },
+    }),
+    prisma.expense.findFirst({
+      where: { id: expenseId },
+      select: { creditCard: { select: { name: true } } },
+    }),
+  ]);
+
+  return buildConfirmation({
+    amount: corrected.amount,
+    description: corrected.description,
+    categoryName: categories.find((c) => c.id === corrected.categoryId)?.name ?? "-",
+    scope: corrected.scope,
+    payerName: members.find((m) => m.id === payerId)?.name ?? "-",
+    date: corrected.date,
+    anomalous: isAnomalous(corrected.amount, average._avg.amount),
+    cardName: cardRow?.creditCard?.name ?? null,
+    corregido: true,
+  });
+}
+
+/**
+ * Parsea el texto y crea el Expense. Devuelve `null` cuando el update ya quedo
+ * contestado sin crear nada (no era un gasto, falta la categoria de respaldo).
+ *
+ * Todo lo que hace esta funcion menos la ultima escritura vive en la Region 2:
+ * si algo tira antes del `expense.create`, NADA quedo escrito y es seguro
+ * pedirle a la persona que reenvie.
+ */
+async function registerExpense(
+  intake: Intake & { text: string },
+  user: { id: string; name: string },
+  parsed: GastoResult,
+  categories: { id: string; name: string }[],
+  members: { id: string; name: string }[]
+): Promise<Registered | null> {
   // `parseMessage` garantiza que categoryName es una de las categorias que se
   // le pasaron O el literal FALLBACK_CATEGORY. El caso que el `!` de antes no
   // cubria es que la fila de respaldo NO EXISTA: `find` devuelve undefined,
@@ -222,6 +361,7 @@ async function registerExpense(
   return {
     expenseId: expense.id,
     amount: parsed.amount,
+    scope: parsed.scope,
     confirmation: buildConfirmation({
       amount: parsed.amount,
       description: parsed.description,
@@ -234,6 +374,197 @@ async function registerExpense(
       unmatchedCardName,
     }),
   };
+}
+
+/**
+ * Un tap de boton. Maneja TODOS sus errores adentro y nunca tira: el catch de
+ * la Region 2 le pediria a la persona que "reenvie el mensaje", y no hay
+ * mensaje que reenviar — hay un boton que se quedo girando.
+ *
+ * Siempre contesta el callback_query, en todos los caminos, incluido el de
+ * error: sin eso Telegram deja el boton en estado de carga y la persona no
+ * sabe si paso algo.
+ */
+async function handleCallback(
+  intake: Intake,
+  user: { id: string; name: string },
+  householdUserIds: string[]
+): Promise<void> {
+  const acusar = (text?: string) =>
+    intake.callbackQueryId ? answerCallbackQuery(intake.callbackQueryId, text) : Promise.resolve();
+
+  // Solo para el log del catch: `action` es un `const` DENTRO del try (mas
+  // abajo) para que el switch narrowe bien el discriminado `kind`; este
+  // string aparte es lo unico que el catch necesita nombrar.
+  let expenseIdParaLog: string | undefined;
+
+  try {
+    // Un dato invalido no puede llegar a Prisma: un ObjectId mal formado hace
+    // tirar a `findFirst`, y eso es un camino de error entero por nada.
+    const action = parseCallbackData(intake.callbackData);
+    if (!action) {
+      await acusar("No entiendo ese boton.");
+      return;
+    }
+    expenseIdParaLog = action.expenseId;
+
+    // Dos capas de permiso, y las dos hacen falta: el `callback_data` viaja
+    // por el cliente, asi que un miembro podria fabricar un tap con el id de
+    // un gasto personal del otro. La regla de visibilidad en la consulta es
+    // la misma que exige `tests/read-paths.test.ts` de toda lectura de
+    // gastos; `canEditViaBot` (mas abajo) es mas estricta todavia — hace
+    // falta haberlo pagado o cargado, no solo poder verlo.
+    const expense = await prisma.expense.findFirst({
+      where: {
+        id: action.expenseId,
+        ...visibleExpensesWhere(user.id, householdUserIds),
+      },
+    });
+    if (!expense) {
+      await acusar("Ese gasto ya no existe.");
+      return;
+    }
+
+    if (!canEditViaBot(expense, user.id)) {
+      await acusar("Ese gasto no lo pagaste ni lo cargaste vos.");
+      return;
+    }
+
+    // Las necesitan el submenu de categorias y la confirmacion reescrita.
+    const [categories, members] = await Promise.all([
+      prisma.category.findMany({ select: { id: true, name: true } }),
+      prisma.user.findMany({
+        where: { id: { in: householdUserIds } },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    switch (action.kind) {
+      case "categoryMenu": {
+        if (intake.callbackMessageId) {
+          await editMessageReplyMarkup(
+            intake.chatId,
+            intake.callbackMessageId,
+            buildCategoryKeyboard(action.expenseId, categories)
+          );
+        }
+        await acusar();
+        break;
+      }
+
+      case "cancel": {
+        // Vuelta atras tanto del submenu de categorias como del pedido de
+        // confirmacion de borrado.
+        if (intake.callbackMessageId) {
+          await editMessageReplyMarkup(
+            intake.chatId,
+            intake.callbackMessageId,
+            buildExpenseKeyboard(action.expenseId, expense.scope)
+          );
+        }
+        await acusar();
+        break;
+      }
+
+      case "deleteAsk": {
+        if (intake.callbackMessageId) {
+          await editMessageReplyMarkup(
+            intake.chatId,
+            intake.callbackMessageId,
+            buildDeleteConfirmKeyboard(action.expenseId)
+          );
+        }
+        await acusar("Seguro que lo borro?");
+        break;
+      }
+
+      case "scope": {
+        const corrected = await applyCorrection(prisma, expense, { scope: action.scope }, categories);
+        if (intake.callbackMessageId) {
+          const confirmation = await buildCorrectedConfirmation(
+            expense.id,
+            expense.userId,
+            corrected,
+            categories,
+            members
+          );
+          await editMessageText(
+            intake.chatId,
+            intake.callbackMessageId,
+            confirmation,
+            buildExpenseKeyboard(action.expenseId, corrected.scope)
+          );
+        }
+        await acusar(`Ahora es ${action.scope}.`);
+        break;
+      }
+
+      case "category": {
+        // Puede no existir mas: una categoria borrada entre que se mando el
+        // teclado y se toco el boton.
+        const category = categories.find((c) => c.id === action.categoryId);
+        if (!category) {
+          await acusar("Esa categoria ya no existe.");
+          break;
+        }
+
+        const corrected = await applyCorrection(
+          prisma,
+          expense,
+          { categoryName: category.name },
+          categories
+        );
+        if (intake.callbackMessageId) {
+          const confirmation = await buildCorrectedConfirmation(
+            expense.id,
+            expense.userId,
+            corrected,
+            categories,
+            members
+          );
+          await editMessageText(
+            intake.chatId,
+            intake.callbackMessageId,
+            confirmation,
+            buildExpenseKeyboard(action.expenseId, corrected.scope)
+          );
+        }
+        await acusar(category.name);
+        break;
+      }
+
+      case "deleteConfirm": {
+        await deleteExpenseWithInstallments(prisma, action.expenseId);
+        // Sin teclado: un teclado sobre un gasto inexistente solo puede dar
+        // errores.
+        if (intake.callbackMessageId) {
+          await editMessageText(
+            intake.chatId,
+            intake.callbackMessageId,
+            `🗑 Borrado: ${expense.description}`
+          );
+        }
+        await acusar("Borrado.");
+        break;
+      }
+    }
+  } catch (error) {
+    console.error(
+      `Error procesando el callback expenseId=${expenseIdParaLog} chatId=${intake.chatId}`,
+      error
+    );
+    try {
+      await acusar("No pude aplicar el cambio por un error de mi lado.");
+    } catch (avisoError) {
+      // El catch del acuse va aparte y solo loguea: si falla el acuse no
+      // queda nada mejor que hacer.
+      console.error(
+        `Tampoco se pudo acusar el callback_query de expenseId=${expenseIdParaLog} ` +
+          `chatId=${intake.chatId}.`,
+        avisoError
+      );
+    }
+  }
 }
 
 /**
@@ -322,12 +653,20 @@ export async function POST(req: Request) {
     });
     if (!user) return OK();
 
+    // Un tap de boton. Se maneja entero aca adentro y no sigue al flujo de
+    // texto: un callback no tiene texto que parsear, y el mensaje de error de
+    // la Region 2 ("reenviame el mensaje") no tiene sentido para un boton.
+    if (intake.callbackData) {
+      await handleCallback(intake, user, householdUserIds);
+      return OK();
+    }
+
     if (!intake.text) {
       await sendMessage(intake.chatId, "Por ahora solo entiendo texto. Las fotos llegan pronto.");
       return OK();
     }
 
-    registered = await registerExpense({ ...intake, text: intake.text }, user, householdUserIds);
+    registered = await handleTextMessage({ ...intake, text: intake.text }, user, householdUserIds);
   } catch (error) {
     console.error(
       `Error procesando el update_id=${intake.updateId} ANTES de crear el gasto: no se ` +
@@ -354,7 +693,11 @@ export async function POST(req: Request) {
   // ─── Region 3: el gasto YA existe, pedir un reenvio duplicaria ───────────
   let sentMessageId: string | null = null;
   try {
-    const sent = await sendMessage(intake.chatId, registered.confirmation);
+    const sent = await sendMessage(
+      intake.chatId,
+      registered.confirmation,
+      buildExpenseKeyboard(registered.expenseId, registered.scope)
+    );
     sentMessageId = String(sent.message_id);
   } catch (error) {
     // El estado "guardado pero sin confirmar" no puede ser indistinguible de
@@ -382,12 +725,23 @@ export async function POST(req: Request) {
       // corregir este gasto por reply. Decir "el usuario no recibio la
       // confirmacion" aca seria mentira, y manda a buscar el problema
       // equivocado.
+      //
+      // Desde este bloque el puntero pesa mas de lo que pesaba: antes solo
+      // impedia corregir por reply. Ahora `resolveCorrectionTarget` lo usa
+      // para resolver el reply SIN AMBIGUEDAD (busca el gasto por
+      // `botChatId` + `botMessageId` exactos); sin el puntero, una
+      // correccion por reply a este mensaje cae al camino de respaldo ("el
+      // ultimo gasto que esa persona registro"), que puede ser OTRO gasto.
+      // El log lo dice para que quede claro que no es solo "no se puede
+      // corregir por reply": es "el reply puede corregir el gasto
+      // equivocado".
       console.error(
         "GASTO GUARDADO Y CONFIRMADO, SIN PUNTERO AL MENSAJE: " +
           `expenseId=${registered.expenseId} chatId=${intake.chatId} ` +
           `messageId=${sentMessageId} — el usuario SI recibio la confirmacion; fallo solo ` +
-          "el update de botChatId/botMessageId, asi que este gasto no se va a poder " +
-          "corregir por reply.",
+          "el update de botChatId/botMessageId. Un reply a este mensaje NO va a resolver a " +
+          "este gasto: cae al camino de respaldo (el ultimo gasto que la persona registro), " +
+          "que puede ser otro.",
         error
       );
     }
