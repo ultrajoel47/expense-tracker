@@ -10,12 +10,15 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    select: { id: true, email: true, name: true },
+    select: { id: true, email: true, name: true, telegramChatId: true },
   });
 
   if (!user) {
     return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json({ user });
+  // Se expone el booleano, no el chatId: la UI solo necesita saber si hay que
+  // ofrecer la vinculacion, y el id del chat no le sirve para nada.
+  const { telegramChatId, ...rest } = user;
+  return NextResponse.json({ user: { ...rest, telegramLinked: Boolean(telegramChatId) } });
 }

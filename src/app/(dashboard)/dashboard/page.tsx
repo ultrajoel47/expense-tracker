@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatCurrency } from "@/lib/format";
+import TelegramLinkCard from "./telegram-link";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -88,6 +89,9 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Vinculacion con el bot de Telegram */}
+      <TelegramLinkCard />
 
       {/* New feature widgets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
