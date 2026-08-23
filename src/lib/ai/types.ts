@@ -17,7 +17,6 @@ export type AliasForPrompt = {
   pattern: string;
   categoryName: string;
   description: string | null;
-  scope: string | null;
 };
 
 export type ParseContext = {

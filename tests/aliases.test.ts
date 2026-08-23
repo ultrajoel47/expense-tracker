@@ -95,20 +95,20 @@ test("loadAliasesForPrompt pide el take y el orderBy esperados", async () => {
 test("loadAliasesForPrompt resuelve el nombre de la categoria", async () => {
   const { client } = clienteFalso({
     findManyResult: [
-      { pattern: "juan perez", categoryId: "cat-1", description: "Juan Perez", scope: null, hits: 3 },
+      { pattern: "juan perez", categoryId: "cat-1", description: "Juan Perez", hits: 3 },
     ],
   });
   const resultado = await loadAliasesForPrompt(client, CATEGORIAS);
   assert.deepEqual(resultado, [
-    { pattern: "juan perez", categoryName: "Comida y delivery", description: "Juan Perez", scope: null },
+    { pattern: "juan perez", categoryName: "Comida y delivery", description: "Juan Perez" },
   ]);
 });
 
 test("loadAliasesForPrompt descarta el alias cuya categoria ya no existe", async () => {
   const { client } = clienteFalso({
     findManyResult: [
-      { pattern: "juan perez", categoryId: "cat-1", description: "Juan Perez", scope: null, hits: 3 },
-      { pattern: "borrada", categoryId: "cat-inexistente", description: null, scope: null, hits: 0 },
+      { pattern: "juan perez", categoryId: "cat-1", description: "Juan Perez", hits: 3 },
+      { pattern: "borrada", categoryId: "cat-inexistente", description: null, hits: 0 },
     ],
   });
   const resultado = await loadAliasesForPrompt(client, CATEGORIAS);
@@ -118,14 +118,43 @@ test("loadAliasesForPrompt descarta el alias cuya categoria ya no existe", async
 
 // ─── learnAlias ──────────────────────────────────────────────────────────
 
-test("learnAlias no escribe si no cambio ni categoria ni ambito", async () => {
+test("learnAlias no escribe si no cambio la categoria", async () => {
   const { client, llamadas } = clienteFalso();
   const escribio = await learnAlias(client, {
     description: "Juan Perez",
     categoryId: "cat-1",
     scope: "casa",
     cambioLaCategoria: false,
-    cambioElAmbito: false,
+  });
+  assert.equal(escribio, false);
+  assert.equal(llamadas.upsert.length, 0);
+});
+
+test("learnAlias no aprende de una correccion que solo cambio el ambito", async () => {
+  // El disparador de ambito se saco de la firma: una correccion que cambio
+  // SOLO el scope (cambioLaCategoria: false) no ensena nada sobre "que es"
+  // este gasto, aunque el nuevo scope resultante sea "casa".
+  const { client, llamadas } = clienteFalso();
+  const escribio = await learnAlias(client, {
+    description: "Juan Perez",
+    categoryId: "cat-1",
+    scope: "casa",
+    cambioLaCategoria: false,
+  });
+  assert.equal(escribio, false);
+  assert.equal(llamadas.upsert.length, 0);
+});
+
+test("learnAlias no aprende de un gasto cuyo ambito resultante es personal", async () => {
+  // Restriccion de privacidad del item 1: aunque cambio la categoria, un
+  // gasto personal no puede dejar rastro en un alias que se inyecta en el
+  // prompt de los DOS miembros del hogar.
+  const { client, llamadas } = clienteFalso();
+  const escribio = await learnAlias(client, {
+    description: "Juan Perez",
+    categoryId: "cat-1",
+    scope: "personal",
+    cambioLaCategoria: true,
   });
   assert.equal(escribio, false);
   assert.equal(llamadas.upsert.length, 0);
@@ -138,20 +167,18 @@ test("learnAlias no escribe con un patron no aprendible", async () => {
     categoryId: "cat-1",
     scope: "casa",
     cambioLaCategoria: true,
-    cambioElAmbito: false,
   });
   assert.equal(escribio, false);
   assert.equal(llamadas.upsert.length, 0);
 });
 
-test("learnAlias hace upsert por el pattern normalizado cuando cambio la categoria", async () => {
+test("learnAlias hace upsert por el pattern normalizado cuando cambio la categoria de un gasto de casa", async () => {
   const { client, llamadas } = clienteFalso();
   const escribio = await learnAlias(client, {
     description: "Juan Pérez",
     categoryId: "cat-1",
     scope: "casa",
     cambioLaCategoria: true,
-    cambioElAmbito: false,
   });
   assert.equal(escribio, true);
   assert.equal(llamadas.upsert.length, 1);
@@ -161,34 +188,18 @@ test("learnAlias hace upsert por el pattern normalizado cuando cambio la categor
   assert.equal(llamadas.upsert[0].create.description, "Juan Pérez");
 });
 
-test("learnAlias no incluye scope en el update cuando el ambito no cambio", async () => {
+test("learnAlias nunca incluye scope, ni en create ni en update", async () => {
   const { client, llamadas } = clienteFalso();
   await learnAlias(client, {
     description: "Juan Perez",
     categoryId: "cat-1",
-    scope: "personal",
+    scope: "casa",
     cambioLaCategoria: true,
-    cambioElAmbito: false,
   });
   assert.equal(llamadas.upsert.length, 1);
   const { update, create } = llamadas.upsert[0];
   assert.equal("scope" in update, false);
   assert.equal("scope" in create, false);
-});
-
-test("learnAlias incluye scope en create y en update cuando el ambito si cambio", async () => {
-  const { client, llamadas } = clienteFalso();
-  await learnAlias(client, {
-    description: "Juan Perez",
-    categoryId: "cat-1",
-    scope: "personal",
-    cambioLaCategoria: false,
-    cambioElAmbito: true,
-  });
-  assert.equal(llamadas.upsert.length, 1);
-  const { update, create } = llamadas.upsert[0];
-  assert.equal(update.scope, "personal");
-  assert.equal(create.scope, "personal");
 });
 
 test("learnAlias llama a onError y devuelve false si el cliente tira, sin propagar", async () => {
@@ -201,7 +212,6 @@ test("learnAlias llama a onError y devuelve false si el cliente tira, sin propag
       categoryId: "cat-1",
       scope: "casa",
       cambioLaCategoria: true,
-      cambioElAmbito: false,
     },
     (error) => {
       capturado = error;

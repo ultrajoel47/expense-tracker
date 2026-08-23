@@ -46,7 +46,6 @@ export type AliasRow = {
   pattern: string;
   categoryId: string;
   description: string | null;
-  scope: string | null;
   hits: number;
 };
 
@@ -93,23 +92,31 @@ export async function loadAliasesForPrompt(
       pattern: row.pattern,
       categoryName: categoria.name,
       description: row.description,
-      scope: row.scope,
     });
   }
   return resultado;
 }
 
 /**
- * Graba o actualiza el alias que una correccion enseña.
+ * Graba o actualiza el alias que una correccion de CATEGORIA ensena.
  *
- * Se aprende SOLO cuando la correccion cambio la categoria o el ambito: son las
- * dos cosas que un alias puede predecir. Corregir un monto o una fecha no
- * ensena nada sobre "que es" este gasto.
+ * Dos restricciones, las dos por privacidad, las dos deliberadas:
  *
- * `scope` se guarda solo si la correccion lo toco. El alias no lo FUERZA (el
- * prompt lo ofrece como contexto), y sobreescribirlo con el ambito incidental
- * de un gasto cuya correccion fue de categoria haria que un alias aprendido de
- * "esto es panaderia" tambien empiece a empujar un ambito que nadie enseno.
+ * 1. **Solo se aprende de gastos de casa.** Los aliases se inyectan en el prompt
+ *    de los DOS miembros del hogar y ese prompt se manda a un proveedor de IA
+ *    externo en cada mensaje. Un alias aprendido de un gasto `personal` llevaria
+ *    la descripcion de ese gasto —un tratamiento medico, un regalo sorpresa— al
+ *    contexto de la otra persona y a un tercero, indefinidamente. No es una
+ *    lectura de `Expense`, asi que ningun guard lo detecta: la unica defensa es
+ *    esta guarda.
+ *
+ * 2. **Un alias ensena la categoria y nada mas.** Antes tambien podia ensenar el
+ *    ambito, y eso peleaba con la regla de ambito del prompt por el lado
+ *    peligroso: `Alias` no tiene `userId`, asi que una correccion de UNA persona
+ *    marcando "farmacia" como personal hacia que las farmacias que cargara la
+ *    OTRA salieran personales tambien — invisibles para quien no las pago, y
+ *    faltando en su total de casa. La columna `scope` sigue en el schema (la base
+ *    tiene datos y no hay razon para migrar) pero no se escribe ni se lee.
  *
  * Nunca tira: un alias es una optimizacion, y hacer fallar una correccion que
  * YA se aplico en la base porque no se pudo guardar una equivalencia seria
@@ -121,14 +128,15 @@ export async function learnAlias(
   entrada: {
     description: string;
     categoryId: string;
+    /** El ambito RESULTANTE del gasto, para la restriccion 1 de arriba. */
     scope: string;
     cambioLaCategoria: boolean;
-    cambioElAmbito: boolean;
   },
   onError?: (error: unknown) => void
 ): Promise<boolean> {
   try {
-    if (!entrada.cambioLaCategoria && !entrada.cambioElAmbito) return false;
+    if (!entrada.cambioLaCategoria) return false;
+    if (entrada.scope === "personal") return false;
 
     const pattern = normalizePattern(entrada.description);
     if (!esPatronAprendible(pattern)) return false;
@@ -139,11 +147,9 @@ export async function learnAlias(
         pattern,
         categoryId: entrada.categoryId,
         description: entrada.description,
-        ...(entrada.cambioElAmbito ? { scope: entrada.scope } : {}),
       },
       update: {
         categoryId: entrada.categoryId,
-        ...(entrada.cambioElAmbito ? { scope: entrada.scope } : {}),
       },
     });
     return true;
