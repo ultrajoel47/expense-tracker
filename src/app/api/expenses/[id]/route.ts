@@ -56,10 +56,19 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // Ver el comentario de cabecera de `rebuildInstallments`: sin esto, corregir
   // el monto de una compra en cuotas no cambia ningun total del dashboard,
   // porque los totales cuentan la cuota que vence, no el total del gasto.
-  if (
-    expense.totalInstallments &&
-    (updated.amount !== expense.amount || updated.date.getTime() !== expense.date.getTime())
-  ) {
+  //
+  // La parte de fecha se compara por año y mes, NO por `getTime()`:
+  // `buildInstallments` solo usa año y mes (fija el dia en 1, en UTC), asi que
+  // dos fechas del mismo mes generan EXACTAMENTE las mismas filas. Comparando
+  // por `getTime()`, un PUT que solo cambia la hora del dia (el date picker de
+  // la web manda medianoche; otro cliente podria mandar otra hora) dentro del
+  // mismo mes se veia como "cambio de fecha" y borraba y recreaba filas
+  // identicas — churn puro, sin ningun efecto en los totales. El monto si se
+  // compara exacto: un centavo de diferencia es un dato real.
+  const mismoMesYAnio =
+    updated.date.getUTCFullYear() === expense.date.getUTCFullYear() &&
+    updated.date.getUTCMonth() === expense.date.getUTCMonth();
+  if (expense.totalInstallments && (updated.amount !== expense.amount || !mismoMesYAnio)) {
     await rebuildInstallments(prisma, id, updated.date, updated.amount, expense.totalInstallments);
   }
 
