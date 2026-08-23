@@ -167,6 +167,7 @@ function buildCorreccion(
   }
 
   if (raw.scope === "casa" || raw.scope === "personal") patch.scope = raw.scope;
+  else if (raw.scope !== null && raw.scope !== undefined) descartados.push("el ambito");
 
   if (Object.keys(patch).length === 0) {
     return {

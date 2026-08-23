@@ -281,6 +281,32 @@ test("si la categoria descartada era el unico campo, el resultado es desconocido
   assert.match(result.reason, /Criptomonedas/);
 });
 
+test("un scope invalido en el patch de correccion se descarta, no se pierde en silencio", async () => {
+  // Antes de este arreglo, un scope invalido no empujaba a `descartados` (a
+  // diferencia de amount/date/categoryName): con "compartido" como unico
+  // campo, el patch quedaba vacio y el motivo era el generico "no entendi que
+  // queres corregir" en vez de mencionar el ambito.
+  const result = await parseMessage(
+    "que sea compartido",
+    CTX,
+    patchProvider({ scope: "compartido" })
+  );
+  assert.equal(result.intent, "desconocido");
+  if (result.intent !== "desconocido") return;
+  assert.match(result.reason, /ambito/);
+});
+
+test("un scope invalido junto con otro campo valido se descarta y el resto del patch se aplica", async () => {
+  const result = await parseMessage(
+    "que sea compartido y 5000",
+    CTX,
+    patchProvider({ scope: "compartido", amount: 5000 })
+  );
+  assert.equal(result.intent, "correccion");
+  if (result.intent !== "correccion") return;
+  assert.deepEqual(result.patch, { amount: 5000 });
+});
+
 test("un patch con todo en null devuelve desconocido", async () => {
   const result = await parseMessage("no entiendo que decis", CTX, patchProvider({}));
   assert.equal(result.intent, "desconocido");
