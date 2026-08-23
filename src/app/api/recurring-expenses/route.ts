@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { visibleRecurringExpensesWhere } from "@/lib/visibility";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
   const categoryId = url.searchParams.get("categoryId");
   const activeParam = url.searchParams.get("active"); // "true" | "false" | null
 
-  const where: Record<string, unknown> = { userId: session.id };
+  const where: Record<string, unknown> = { ...visibleRecurringExpensesWhere(session.id) };
   if (categoryId) where.categoryId = categoryId;
   if (activeParam === "true") where.active = true;
   if (activeParam === "false") where.active = false;

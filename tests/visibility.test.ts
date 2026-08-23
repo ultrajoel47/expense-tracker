@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { visibleExpensesWhere, canEditViaBot } from "../src/lib/visibility.ts";
+import { visibleExpensesWhere, visibleRecurringExpensesWhere, canEditViaBot } from "../src/lib/visibility.ts";
 
 const JOEL = "joel-id";
 const ELLA = "ella-id";
@@ -34,4 +34,18 @@ test("canEditViaBot permite a quien lo registro aunque no lo pueda leer", () => 
 test("canEditViaBot rechaza a un tercero", () => {
   const expense = { userId: JOEL, createdById: JOEL };
   assert.equal(canEditViaBot(expense, "otro-id"), false);
+});
+
+test("visibleRecurringExpensesWhere incluye siempre los recurrentes de casa", () => {
+  const where = visibleRecurringExpensesWhere(JOEL);
+  assert.deepEqual(where.OR[0], { scope: "casa" });
+});
+
+test("visibleRecurringExpensesWhere limita los personales a quien paga", () => {
+  const where = visibleRecurringExpensesWhere(JOEL);
+  assert.deepEqual(where.OR[1], { scope: "personal", userId: JOEL });
+});
+
+test("visibleRecurringExpensesWhere aplica la misma regla que visibleExpensesWhere", () => {
+  assert.deepEqual(visibleRecurringExpensesWhere(JOEL), visibleExpensesWhere(JOEL));
 });

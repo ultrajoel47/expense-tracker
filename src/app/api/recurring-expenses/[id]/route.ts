@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { visibleRecurringExpensesWhere } from "@/lib/visibility";
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -8,7 +9,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const { id } = await params;
   const rec = await prisma.recurringExpense.findFirst({
-    where: { id, userId: session.id },
+    where: { id, ...visibleRecurringExpensesWhere(session.id) },
   });
   if (!rec) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
@@ -40,7 +41,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const { id } = await params;
-  const rec = await prisma.recurringExpense.findFirst({ where: { id, userId: session.id } });
+  const rec = await prisma.recurringExpense.findFirst({
+    where: { id, ...visibleRecurringExpensesWhere(session.id) },
+  });
   if (!rec) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   await prisma.recurringExpense.delete({ where: { id } });

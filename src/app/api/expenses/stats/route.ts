@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { visibleExpensesWhere } from "@/lib/visibility";
+import { visibleExpensesWhere, visibleRecurringExpensesWhere } from "@/lib/visibility";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -126,7 +126,7 @@ export async function GET(req: Request) {
   in30Days.setDate(in30Days.getDate() + 30);
   const upcomingRecurring = await prisma.recurringExpense.findMany({
     where: {
-      userId: session.id,
+      ...visibleRecurringExpensesWhere(session.id),
       active: true,
       nextDue: { lte: in30Days },
     },
