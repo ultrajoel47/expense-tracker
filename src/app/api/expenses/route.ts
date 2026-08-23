@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere } from "@/lib/visibility";
-import { getHouseholdUserIds } from "@/lib/household";
+import { getHouseholdUserIds, isHouseholdMember } from "@/lib/household";
 import { buildInstallments } from "@/lib/expenses/installments";
 import { materializeRecurringForMonth } from "@/lib/recurring-materialize";
 
@@ -97,6 +97,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  if (!(await isHouseholdMember(session.id))) {
+    return NextResponse.json({ error: "No habilitado" }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

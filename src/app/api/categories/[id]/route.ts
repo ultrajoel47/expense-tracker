@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isHouseholdMember } from "@/lib/household";
 import { FALLBACK_CATEGORY } from "@/lib/ai/parse";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  if (!(await isHouseholdMember(session.id))) {
+    return NextResponse.json({ error: "No habilitado" }, { status: 403 });
+  }
 
   const { id } = await params;
   const { name, icon, color } = await req.json();
@@ -38,6 +42,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+  if (!(await isHouseholdMember(session.id))) {
+    return NextResponse.json({ error: "No habilitado" }, { status: 403 });
+  }
 
   const { id } = await params;
 
