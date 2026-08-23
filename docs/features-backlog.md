@@ -25,6 +25,7 @@ implementadas o están incompletas en el sistema. Ordenadas por prioridad.
 | 5 | [Separación débito vs crédito en resumen](#5-separación-débito-vs-crédito) | ⬜ Pendiente | |
 | 6 | [Proyección crédito mes siguiente](#6-proyección-crédito-mes-siguiente) | ⬜ Pendiente | |
 | 7 | [Selector de mes histórico](#7-selector-de-mes-histórico) | ⬜ Pendiente | |
+| 12 | [Desaprender un alias](#12-desaprender-un-alias) | ⬜ Pendiente | |
 
 La numeración se conserva con huecos a propósito, para que las referencias
 viejas a "el ítem 9" no apunten a otra cosa.
@@ -125,6 +126,39 @@ vista de la casa, y ver los totales de ese período. La página de gastos ya tie
 navegación por mes — aplicar el mismo patrón al resto.
 
 Se cruza con la tendencia de 12 meses de la Rebanada 3.
+
+---
+
+### 12. Desaprender un alias
+
+**Descripción:** `src/lib/aliases.ts` graba un alias solo cuando una corrección
+cambia la categoría o el ámbito, y lo actualiza (pisándolo) cuando la misma
+descripción se vuelve a corregir. Pero si un alias se aprendió mal y esa
+descripción no vuelve a aparecer, no hay forma de sacarlo: sigue instalado y
+sigue entrando al prompt. Hoy no hay ninguna pantalla ni comando para borrar un
+alias existente.
+
+**No se resuelve con código en el Bloque 3B** a propósito: una pantalla de
+administración de aliases es alcance nuevo (CRUD + UI), y enseñarle al bot a
+"olvidar" por un mensaje de texto ("olvidate de X") es otra rebanada — abre las
+mismas preguntas de diseño que aprender (¿qué patrón exacto se borra? ¿lo puede
+pedir cualquiera de los dos o solo quien lo cargó?) sin que el bloque de
+consultas las necesite resolver.
+
+**Datos para quien lo tome, para no arrancar de cero:**
+
+- El patrón sale de la `description` del gasto (normalizada con
+  `normalizePattern`), no del texto del mensaje que corrige.
+- La clave del alias es `pattern` normalizado (`Alias.pattern`, único): borrar
+  o editar es un `delete`/`update` por esa clave.
+- `hits` existe justamente para poder ver cuáles alias no se usan nunca (un
+  alias con `hits: 0` después de mucho tiempo es candidato a revisar a mano) —
+  ver el comentario de `recordAliasHit` en `src/lib/aliases.ts`.
+- `TOPE_PARA_EL_PROMPT`, ordenado por `hits` descendente, ya limita el daño de
+  un alias mal aprendido que nadie usa: con el tiempo queda empujado fuera del
+  prompt por los que sí se usan. No es una solución (sigue en la base y puede
+  volver a entrar si empieza a "acertar" por casualidad), pero acota el impacto
+  mientras no existe una forma de borrarlo.
 
 ---
 

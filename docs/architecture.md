@@ -54,7 +54,7 @@ src/
 │   ├── telegram/                # Cliente del bot y normalización de updates
 │   ├── ai/                      # AiProvider, parseMessage y el prompt
 │   ├── ocr/                     # (futuro) OcrEngine y sus backends
-│   └── queries/                 # (futuro) Agregaciones para las consultas del bot
+│   └── queries/                 # aggregate.ts (resuelve el intent "consulta") + format.ts (la respuesta en texto)
 ├── prisma/
 │   └── schema.prisma            # Los 8 modelos
 └── scripts/                     # Semillas y migraciones puntuales (sin type-check)
@@ -204,6 +204,39 @@ equivalencia — nadie llena un formulario de aliases.
   un gasto. Las tres van con su propio manejo de errores: un alias es una
   mejora del prompt, nunca puede convertir un gasto o una corrección ya
   aplicados en un mensaje de error.
+
+### `src/lib/queries/` — las consultas del bot
+
+Resuelve el intent `"consulta"`: "cuánto gastamos este mes", "en qué se nos fue
+la plata en julio", "cómo venimos comparado con antes". Implementa la sección 7
+del [diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).
+
+- `aggregate.ts` — `resolveConsulta(client, query, actorId, householdUserIds)`.
+  Módulo puro con cliente inyectado (mismo patrón que `correct.ts` y
+  `aliases.ts`).
+- `format.ts` — `formatConsultaAnswer(answer, query)`, el texto que se manda por
+  Telegram. Separado de `aggregate.ts` porque agregar y formatear son dos
+  trabajos con motivos de cambio distintos.
+
+**La regla del bloque: el LLM no ve ningún número y no genera ninguna query.**
+`parseMessage` (`src/lib/ai/parse.ts`) traduce la pregunta a una `ConsultaQuery`
+acotada — métrica conocida, fechas reales y recortadas a un rango sensato
+(`CONSULTA_MESES_MAXIMOS`), categoría que existe — sin que el modelo calcule
+nada. `resolveConsulta` es quien agrega con Prisma.
+
+**Y usa `expensesToCharges`, la MISMA función que el dashboard.** Es la tercera
+implementación de la semántica de flujo de la Enmienda 1 (después del listado y
+de `stats/route.ts`), y a diferencia del export de CSV — documentado más abajo
+como una divergencia deliberada — esta SÍ está alineada a propósito: el número
+que el bot contesta tiene que coincidir con el del dashboard para el mismo mes,
+o uno de los dos pierde toda credibilidad. `resolveConsulta` trae los gastos
+**sin filtro de fecha** (una cuota que vence en el rango puede venir de una
+compra vieja) y recorta con `expensesToCharges`, igual que `stats/route.ts`.
+
+`resolveConsulta` también materializa los recurrentes de cada mes del rango
+antes de leer (la misma escritura idempotente y acotada que ya disparan los dos
+GET del dashboard), para que un alquiler entre en la respuesta del bot igual
+que entra en la web.
 
 ## Reglas transversales
 

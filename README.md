@@ -27,15 +27,16 @@ Construido con Next.js 16, Prisma y MongoDB.
 - Gastos recurrentes: plantillas administradas desde `dashboard/recurring/`, con
   materialización automática mensual (perezosa, al leer un mes se crean los
   `Expense` que falten — ver `src/lib/recurring-materialize.ts`)
+- Consultas por el bot: "cuánto gastamos este mes", "en qué se nos fue la plata
+  en julio", "cómo venimos comparado con antes" — el LLM solo traduce la
+  pregunta, nunca ve ni inventa un número; el código agrega con Prisma
+  (`src/lib/queries/aggregate.ts`, misma semántica de cuotas que el dashboard)
+  y formatea la respuesta (`src/lib/queries/format.ts`)
 - Dashboard con graficos (Recharts)
 - Exportacion a CSV
 
 Todavía **no** está, aunque el diseño lo contempla: el OCR de comprobantes por
-foto, y las consultas por el bot ("cuánto gasté este mes en comida" sigue
-contestando que todavía no puede responder preguntas — ver
-`consulta_no_soportada` y `src/lib/queries/` en
-[docs/architecture.md](docs/architecture.md)). Ver
-[docs/features-backlog.md](docs/features-backlog.md).
+foto. Ver [docs/features-backlog.md](docs/features-backlog.md).
 
 ## Tech Stack
 
