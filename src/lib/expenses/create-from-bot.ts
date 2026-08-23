@@ -28,6 +28,50 @@ export function formatArs(amount: number): string {
   }).format(amount);
 }
 
+/**
+ * Normaliza un nombre de tarjeta para comparar: minusculas, sin acentos, sin
+ * espacios de sobra. "BBVA Crédito" y "bbva credito" tienen que matchear.
+ */
+function normalizeCardName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Resuelve el nombre de tarjeta que dijo la IA contra las tarjetas reales del
+ * pagador. Devuelve `null` si no matchea ninguna.
+ *
+ * `cardName` viene del mensaje de la persona, no de un selector: dice "con la
+ * visa" o "con la bbva", casi nunca el nombre exacto de la fila. Por eso
+ * despues del match exacto se prueban las dos direcciones de `contains`:
+ * "visa" contra "Visa Galicia", y "mercado pago debito" contra "Mercado pago".
+ * El match exacto va primero para que un nombre completo no lo gane una
+ * coincidencia parcial de otra tarjeta.
+ *
+ * Si dos tarjetas matchean parcialmente se toma la primera: es ambiguo por
+ * naturaleza y el usuario lo corrige en la web (la confirmacion dice cual se
+ * eligio).
+ */
+export function resolveCard<T extends { id: string; name: string }>(
+  cardName: string | null | undefined,
+  cards: readonly T[]
+): T | null {
+  if (!cardName) return null;
+  const needle = normalizeCardName(cardName);
+  if (!needle) return null;
+
+  return (
+    cards.find((c) => normalizeCardName(c.name) === needle) ??
+    cards.find((c) => normalizeCardName(c.name).includes(needle)) ??
+    cards.find((c) => needle.includes(normalizeCardName(c.name))) ??
+    null
+  );
+}
+
 export function buildConfirmation(e: {
   amount: number;
   description: string;
@@ -36,6 +80,15 @@ export function buildConfirmation(e: {
   payerName: string;
   date: Date;
   anomalous: boolean;
+  /** Nombre de la tarjeta que quedo asociada, o null si el gasto no tiene. */
+  cardName?: string | null;
+  /**
+   * Nombre de tarjeta que la persona dijo y que NO matcheo ninguna suya. El
+   * gasto se guarda igual, sin tarjeta, pero hay que decirlo: si no, la compra
+   * queda fuera de la deuda de tarjetas y de la pagina de tarjetas sin que
+   * nadie se entere.
+   */
+  unmatchedCardName?: string | null;
 }): string {
   const fecha = new Intl.DateTimeFormat("es-AR", {
     timeZone: "America/Argentina/Buenos_Aires",
@@ -45,8 +98,16 @@ export function buildConfirmation(e: {
 
   const lines = [
     `✓ <b>${formatArs(e.amount)}</b> · ${e.description}`,
-    `${e.categoryName} · ${e.scope} · pago ${e.payerName} · ${fecha}`,
+    `${e.categoryName} · ${e.scope} · pago ${e.payerName} · ${fecha}` +
+      (e.cardName ? ` · ${e.cardName}` : ""),
   ];
+
+  if (e.unmatchedCardName) {
+    lines.push(
+      `⚠ No encontre una tarjeta tuya que se parezca a "${e.unmatchedCardName}", ` +
+        "asi que el gasto quedo SIN tarjeta. Asignala en la web."
+    );
+  }
 
   if (e.anomalous) {
     lines.push("⚠ El monto es muy alto para esta categoria, revisa que este bien.");

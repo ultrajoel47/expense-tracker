@@ -7,7 +7,7 @@ import { sendMessage } from "@/lib/telegram/client";
 import { FALLBACK_CATEGORY, parseMessage } from "@/lib/ai/parse";
 import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
-import { buildConfirmation, isAnomalous } from "@/lib/expenses/create-from-bot";
+import { buildConfirmation, isAnomalous, resolveCard } from "@/lib/expenses/create-from-bot";
 import { getHouseholdUserIds } from "@/lib/household";
 
 /** Telegram reintenta ante cualquier respuesta que no sea 200. Siempre 200. */
@@ -150,10 +150,28 @@ export async function POST(req: Request) {
         members.find((m) => m.name.toLowerCase() === parsed.payerName!.toLowerCase())) ||
       user;
 
-    const average = await prisma.expense.aggregate({
-      where: { categoryId: category.id },
-      _avg: { amount: true },
-    });
+    // `parsed.cardName` se extraia y se validaba en parse.ts y despues se
+    // descartaba en silencio: NINGUN gasto cargado por el bot quedaba con
+    // creditCardId, asi que "super 45.300 con la visa en 3 cuotas" salia de la
+    // deuda de tarjetas del dashboard (stats filtra por creditCardId != null),
+    // de la pagina de tarjetas y de /api/credit-cards/[id]/pending. Las
+    // tarjetas son POR PERSONA, asi que se resuelve contra las del PAGADOR.
+    const [average, payerCards] = await Promise.all([
+      prisma.expense.aggregate({
+        where: { categoryId: category.id },
+        _avg: { amount: true },
+      }),
+      prisma.creditCard.findMany({
+        where: { userId: payer.id },
+        select: { id: true, name: true },
+      }),
+    ]);
+
+    const card = resolveCard(parsed.cardName, payerCards);
+    // Si dijo una tarjeta y no matcheo ninguna, el gasto se guarda sin tarjeta
+    // pero la confirmacion lo avisa: un silencio acá deja la compra fuera de
+    // la deuda de tarjetas sin que nadie se entere.
+    const unmatchedCardName = parsed.cardName && !card ? parsed.cardName : null;
 
     const expense = await prisma.expense.create({
       data: {
@@ -161,6 +179,7 @@ export async function POST(req: Request) {
         description: parsed.description,
         date: parsed.date,
         categoryId: category.id,
+        creditCardId: card?.id ?? null,
         userId: payer.id,
         createdById: user.id,
         scope: parsed.scope,
@@ -207,6 +226,8 @@ export async function POST(req: Request) {
           payerName: payer.name,
           date: parsed.date,
           anomalous: isAnomalous(parsed.amount, average._avg.amount),
+          cardName: card?.name ?? null,
+          unmatchedCardName,
         })
       );
 
