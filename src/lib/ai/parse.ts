@@ -35,7 +35,7 @@ Formato de respuesta para un gasto:
 {
   "intent": "gasto",
   "amount": <numero entero de pesos, sin jerga ni texto, ej 12000>,
-  "description": "<comercio o concepto, corto>",
+  "description": "<comercio, persona o concepto, corto>",
   "date": "<YYYY-MM-DD>",
   "categoryName": "<una de la lista>",
   "scope": "casa" | "personal",
@@ -48,9 +48,24 @@ Si el mensaje no describe un gasto:
 { "intent": "desconocido", "reason": "<motivo breve>" }
 
 Reglas:
-- "scope" es "casa" si el gasto es del hogar y lo aprovechan los dos
-  (supermercado, servicios, alquiler, delivery compartido). Es "personal" si
-  es de una sola persona (ropa, un hobby, algo propio).
+- Una transferencia, un pago o un "le pague a X" a una persona, un comercio o
+  un alias TAMBIEN es un gasto (intent "gasto"), aunque no se compre algo
+  explicito. El nombre del destinatario va en "description".
+- "amount" es siempre el numero final en pesos, con la jerga ya resuelta:
+  una "luca" son 1.000 pesos, un "palo" son 1.000.000 de pesos. Por ejemplo
+  "2 palos" son 2000000 y "3 lucas con 500" son 3500. Nunca devuelvas la
+  jerga en texto ni el numero sin multiplicar.
+- "scope" es "casa" cuando el gasto lo usan o se benefician los dos: comida,
+  supermercado, servicios, alquiler, el auto, salud y farmacia, salidas o
+  comidas compartidas, y en general cualquier cosa del hogar. Es "personal"
+  solo cuando es de una sola persona: su ropa, su hobby, un regalo que hace.
+  Si el mensaje nombra al otro integrante del hogar como acompañante (por su
+  nombre o por un apodo o diminutivo que le corresponda, aunque no se
+  parezca en las letras: los apodos en español muchas veces no derivan del
+  nombre completo de forma obvia, ej. "Pepe" por "Jose", "Vicky" o "Vir" por
+  "Virginia", "Male" por "Maria Elena". Fijate si el apodo mencionado podria
+  referirse a alguno de los integrantes de la lista antes de asumir que es
+  otra persona), el gasto es "casa".
 - Nunca inventes una categoria que no este en la lista.
 - Para la fecha, resolve expresiones como "ayer" o "el viernes" contra la
   fecha de hoy y devolve SIEMPRE el formato YYYY-MM-DD.
@@ -58,6 +73,7 @@ Reglas:
 }
 
 function extractJson(raw: string): unknown {
+  if (typeof raw !== "string") return null;
   const trimmed = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "");
   const start = trimmed.indexOf("{");
   const end = trimmed.lastIndexOf("}");
@@ -91,7 +107,11 @@ export async function parseMessage(
     return { intent: "desconocido", reason };
   }
 
-  const amount = normalizeAmount(parsed.amount as string | number);
+  const rawAmount = parsed.amount;
+  const amount =
+    typeof rawAmount === "string" || typeof rawAmount === "number"
+      ? normalizeAmount(rawAmount)
+      : null;
   if (amount === null) {
     return { intent: "desconocido", reason: "No pude entender el monto" };
   }

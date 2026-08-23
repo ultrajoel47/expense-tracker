@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseMessage } from "../src/lib/ai/parse.ts";
-import type { ParseContext } from "../src/lib/ai/types.ts";
+import type { ParseContext, ParseResult } from "../src/lib/ai/types.ts";
 
 const CTX: ParseContext = {
   categories: ["Supermercado", "Comida y delivery", "Ropa", "Otros"],
@@ -127,4 +127,98 @@ test("extrae el pagador cuando lo nombra", async () => {
   if (result.intent !== "gasto") return;
   assert.equal(result.payerName, "Joel");
   assert.equal(result.scope, "personal");
+});
+
+test("no revienta si amount viene ausente", async () => {
+  const provider = fakeProvider(
+    JSON.stringify({
+      intent: "gasto",
+      description: "algo",
+      date: "2026-08-22",
+      categoryName: "Otros",
+      scope: "casa",
+    })
+  );
+  let result: ParseResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await parseMessage("gaste algo", CTX, provider);
+  });
+  assert.ok(result);
+  assert.equal(result.intent, "desconocido");
+});
+
+test("no revienta si amount es null", async () => {
+  const provider = fakeProvider(
+    JSON.stringify({
+      intent: "gasto",
+      amount: null,
+      description: "algo",
+      date: "2026-08-22",
+      categoryName: "Otros",
+      scope: "casa",
+    })
+  );
+  let result: ParseResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await parseMessage("gaste algo", CTX, provider);
+  });
+  assert.ok(result);
+  assert.equal(result.intent, "desconocido");
+});
+
+test("no revienta si amount es un booleano", async () => {
+  const provider = fakeProvider(
+    JSON.stringify({
+      intent: "gasto",
+      amount: true,
+      description: "algo",
+      date: "2026-08-22",
+      categoryName: "Otros",
+      scope: "casa",
+    })
+  );
+  let result: ParseResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await parseMessage("gaste algo", CTX, provider);
+  });
+  assert.ok(result);
+  assert.equal(result.intent, "desconocido");
+});
+
+test("no revienta si amount es un array", async () => {
+  const provider = fakeProvider(
+    JSON.stringify({
+      intent: "gasto",
+      amount: [12000],
+      description: "algo",
+      date: "2026-08-22",
+      categoryName: "Otros",
+      scope: "casa",
+    })
+  );
+  let result: ParseResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await parseMessage("gaste algo", CTX, provider);
+  });
+  assert.ok(result);
+  assert.equal(result.intent, "desconocido");
+});
+
+test("no revienta si amount es un objeto", async () => {
+  const provider = fakeProvider(
+    JSON.stringify({
+      intent: "gasto",
+      amount: { v: 1 },
+      description: "algo",
+      date: "2026-08-22",
+      categoryName: "Otros",
+      scope: "casa",
+    })
+  );
+  let result: ParseResult | undefined;
+  await assert.doesNotReject(async () => {
+    result = await parseMessage("gaste algo", CTX, provider);
+  });
+  assert.ok(result);
+  assert.equal(result.intent, "desconocido");
 });
