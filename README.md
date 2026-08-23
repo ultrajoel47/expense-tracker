@@ -1,40 +1,38 @@
-# Expense Tracker OCR
+# Expense Tracker
 
-Aplicacion de seguimiento de gastos con escaneo de recibos mediante IA (GPT-4o Vision). Construida con Next.js, Prisma y PostgreSQL.
+Tracker de gastos de un hogar de dos personas. La ingesta principal es un **bot
+de Telegram**: se le manda "12 lucas panadería" y el gasto queda cargado, con
+monto, fecha y categoría inferidos. La web es donde se consulta y se corrige.
 
-![Screenshot](public/screenshot.png)
+Construido con Next.js 16, Prisma y MongoDB.
 
 ## Caracteristicas
 
-- Autenticacion de usuarios (registro/login con JWT)
-- CRUD de gastos con categorias
-- Escaneo de recibos con OCR (GPT-4o Vision)
-- Auto-categorizacion de gastos con IA
-- Administracion de categorias (nombre, icono, color)
-- Presupuestos mensuales por categoria
+- Carga de gastos por Telegram, con parseo del mensaje por IA (Grok / xAI)
+- OCR de comprobantes de transferencia, detrás de una interfaz intercambiable
+  (`tesseract.js` en Vercel, binario nativo en el VPS)
+- Autenticacion con JWT en cookie httpOnly
+- CRUD de gastos con categorias, tarjetas de crédito y cuotas
+- Gastos recurrentes que se materializan mes a mes
+- Ambito `casa` / `personal`: los de casa los ven los dos, los personales sólo
+  quien pagó
 - Dashboard con graficos (Recharts)
-- Subida de imagenes a Cloudinary
-- Exportacion de gastos
-- Drag & drop para subir recibos
+- Exportacion a CSV
 
 ## Tech Stack
 
-- **Frontend:** Next.js 16, React 19, Tailwind CSS 4
+- **Frontend:** Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS 4
 - **Backend:** Next.js API Routes
-- **Base de datos:** PostgreSQL + Prisma ORM
-- **IA/OCR:** OpenAI GPT-4o Vision
-- **Almacenamiento:** Cloudinary
+- **Base de datos:** MongoDB + Prisma ORM
+- **Ingesta:** Telegram Bot API
+- **IA:** Grok (xAI)
+- **OCR:** Tesseract
 - **Graficos:** Recharts
 
 ## Instalacion
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/fazt/expense-tracker-ocr.git
-cd expense-tracker-ocr
-
-# Instalar dependencias
-pnpm install
+npm install
 
 # Configurar variables de entorno
 cp .env.example .env
@@ -43,28 +41,43 @@ cp .env.example .env
 
 ## Variables de Entorno
 
-```env
-DATABASE_URL="postgresql://usuario:password@localhost:5432/expense_tracker"
-OPENAI_API_KEY="tu-api-key"
-CLOUDINARY_CLOUD_NAME="tu-cloud-name"
-CLOUDINARY_API_KEY="tu-api-key"
-CLOUDINARY_API_SECRET="tu-api-secret"
-```
+Ver [`.env.example`](.env.example) para la plantilla completa. `DATABASE_URL` y
+`JWT_SECRET` son **obligatorias**: la app no arranca sin ellas.
 
 ## Base de Datos
 
 ```bash
-# Sincronizar schema con la base de datos
+# Sincronizar el schema con la base
 npx prisma db push
+npx prisma generate
 
-# Ejecutar seed (categorias iniciales)
-npx prisma db seed
+# Sembrar las categorias iniciales
+node --env-file=.env scripts/seed-categories.ts
 ```
+
+Hay índices que Prisma no puede expresar y se crean a mano; sin ellos el primer
+`db push` puede fallar. Ver
+[docs/data-models.md](docs/data-models.md#pasos-manuales-en-mongo).
 
 ## Desarrollo
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Abrir [http://localhost:3000](http://localhost:3000) en el navegador.
+
+## Verificacion
+
+```bash
+npx tsc --noEmit
+npm run build
+npm test
+```
+
+## Documentacion
+
+- [CLAUDE.md](CLAUDE.md) — contexto y reglas de dominio
+- [docs/architecture.md](docs/architecture.md) — estructura y los seams de ingesta/IA/OCR
+- [docs/data-models.md](docs/data-models.md) — los 8 modelos de Prisma
+- [docs/features-backlog.md](docs/features-backlog.md) — backlog pendiente

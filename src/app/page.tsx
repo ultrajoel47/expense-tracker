@@ -7,7 +7,8 @@ export default function Home() {
         <div className="text-6xl mb-4">$</div>
         <h1 className="text-5xl font-bold">Expense Tracker</h1>
         <p className="text-xl text-indigo-100 max-w-md mx-auto">
-          Escanea recibos con OCR, categoriza automaticamente y controla tu presupuesto
+          Manda el gasto por Telegram y se carga solo. Escanea comprobantes con OCR y
+          categoriza automaticamente.
         </p>
         <div className="flex gap-4 justify-center pt-4">
           <Link
@@ -25,10 +26,10 @@ export default function Home() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-12 max-w-2xl">
           {[
-            ["OCR Scan", "Escanea tickets y facturas"],
+            ["Bot de Telegram", "Carga un gasto escribiendo"],
+            ["OCR Scan", "Escanea tickets y comprobantes"],
             ["Auto-Categorias", "Clasificacion automatica"],
-            ["Presupuestos", "Alertas al limite"],
-            ["Reportes CSV", "Exporta para impuestos"],
+            ["Reportes CSV", "Exporta tus gastos"],
           ].map(([title, desc]) => (
             <div key={title} className="bg-white/10 backdrop-blur rounded-lg p-4">
               <h3 className="font-semibold text-sm">{title}</h3>

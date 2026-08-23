@@ -1,6 +1,17 @@
 # Features Backlog — Gaps vs. Excel "Gastos Casa"
 
-Funcionalidades identificadas en el spreadsheet original que no están implementadas o están incompletas en el sistema. Ordenadas por prioridad.
+Funcionalidades identificadas en el spreadsheet original que no están
+implementadas o están incompletas en el sistema. Ordenadas por prioridad.
+
+> **Purgado el 2026-08-22.** Este backlog se escribió cuando la app era un
+> tracker multiusuario con grupos, splits proporcionales al sueldo y balance de
+> deudas entre pares. Ese dominio se eliminó. Los ítems que dependían de él
+> están listados como descartados al final, y no se van a implementar.
+>
+> El trabajo del bot de Telegram, la IA, el OCR, los aliases y las consultas
+> **no** vive acá: está en
+> [superpowers/specs/2026-08-22-gastos-bot-telegram-design.md](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md),
+> cortado en rebanadas en su sección 16.
 
 ---
 
@@ -8,17 +19,15 @@ Funcionalidades identificadas en el spreadsheet original que no están implement
 
 | # | Feature | Estado | Notas |
 |---|---------|--------|-------|
-| 1 | [Cuotas: filtrado por dueDate](#1-cuotas--filtrado-correcto-por-mes) | ✅ Completo | Fix en expenses, shared y groups/summary |
-| 2 | [Resumen mensual "Ideal vs Real"](#2-resumen-mensual-ideal-vs-real) | ✅ Completo | Columnas Ideal, Diferencia, Disponible + tfoot totales |
+| 1 | [Cuotas: filtrado por dueDate](#1-cuotas--filtrado-correcto-por-mes) | ✅ Completo | En `expenses/route.ts` |
 | 3 | [Tarjeta: responsable de pago ≠ dueño](#3-tarjeta-responsable-de-pago--dueño) | ⬜ Pendiente | |
 | 4 | [Total por tarjeta con vencimiento mensual](#4-total-por-tarjeta-con-vencimiento-mensual) | ⬜ Pendiente | |
 | 5 | [Separación débito vs crédito en resumen](#5-separación-débito-vs-crédito) | ⬜ Pendiente | |
 | 6 | [Proyección crédito mes siguiente](#6-proyección-crédito-mes-siguiente) | ⬜ Pendiente | |
-| 7 | [Selector de mes histórico en resumen](#7-selector-de-mes-histórico) | ⬜ Pendiente | |
-| 8 | [UI unificada: Compartidos + Grupos](#8-ui-unificada-compartidos--grupos) | ⬜ Pendiente | **Requiere planificación previa antes de ejecutar** |
-| 9 | [Invariante: gasto compartido requiere grupo](#9-invariante-gasto-compartido-requiere-grupo) | ⬜ Pendiente | Validación en API + UI + recurring |
-| 10 | [Configuración automática de % por ingresos en grupos](#10-configuración-automática-de--por-ingresos-en-grupos) | ✅ Completo | Botón "Sync %" en grupos + endpoint POST sync-percentages |
-| 11 | [Cards métricas: balance neto unificado](#11-cards-métricas-balance-neto-unificado) | ✅ Completo | Bug fix recurrentes + card diferencia alineada con resumen |
+| 7 | [Selector de mes histórico](#7-selector-de-mes-histórico) | ⬜ Pendiente | |
+
+La numeración se conserva con huecos a propósito, para que las referencias
+viejas a "el ítem 9" no apunten a otra cosa.
 
 ---
 
@@ -26,42 +35,29 @@ Funcionalidades identificadas en el spreadsheet original que no están implement
 
 ### 1. Cuotas — Filtrado correcto por mes
 
-**Problema:** Al filtrar gastos por mes, se usa `expense.date` (fecha de la compra). Un gasto en 12 cuotas aparece entero en el mes de compra y en ningún otro.
+**Problema:** Al filtrar gastos por mes, se usa `expense.date` (fecha de la
+compra). Un gasto en 12 cuotas aparece entero en el mes de compra y en ningún
+otro.
 
-**Comportamiento correcto:** Usar `installment.dueDate`. Cada mes solo debe aparecer la cuota que vence ese mes, con su monto parcial (`installmentAmount`).
+**Comportamiento correcto:** Usar `installment.dueDate`. Cada mes solo debe
+aparecer la cuota que vence ese mes, con su monto parcial (`installmentAmount`).
 
-**Archivos a modificar:**
-- `src/app/api/expenses/route.ts`
-- `src/app/api/shared/route.ts`
-- `src/app/api/groups/[id]/summary/route.ts`
-
----
-
-### 2. Resumen mensual "Ideal vs Real"
-
-**Descripción:** Vista central del Excel. Por cada integrante del grupo, mostrar:
-- **Ingresos** del mes
-- **Porcentaje** proporcional al total de ingresos del grupo
-- **Ideal a pagar** = gasto_total_mes × porcentaje
-- **Monto realmente abonado** (suma de sus tarjetas/gastos ese mes)
-- **Diferencia** (real − ideal)
-- **Ingresos restantes** (ingresos − monto abonado)
-
-**Datos disponibles:** `MonthlyIncome` ya existe en el sistema. El summary API ya calcula `totalPaid` por miembro.
-
-**Archivos nuevos/modificados:**
-- `src/app/api/groups/[id]/summary/route.ts` — agregar campos ideal/diferencia
-- `src/app/(dashboard)/dashboard/groups/[id]/page.tsx` — nueva sección de resumen
+**Estado:** implementado en `src/app/api/expenses/route.ts`. Cuando se reconstruya
+la vista de la casa y se materialicen los recurrentes (Rebanada 3), hay que
+aplicar el mismo criterio ahí.
 
 ---
 
 ### 3. Tarjeta: Responsable de pago ≠ dueño
 
-**Descripción:** En el Excel una tarjeta tiene `Propietario` (quien compra) y `Responsable de pago` (quien paga la factura). Pueden ser personas distintas.
+**Descripción:** En el Excel una tarjeta tiene `Propietario` (quien compra) y
+`Responsable de pago` (quien paga la factura). Pueden ser personas distintas.
 
 Ejemplo: "BBVA Pablo" → propietario: Pablo, responsable: Virginia.
 
-**Impacto:** Actualmente hay que asignar manualmente el pagador en cada gasto. Con este feature, el pagador se derivaría automáticamente de la tarjeta.
+**Impacto:** hoy el pagador de un gasto es quien lo registra. Con este feature,
+`Expense.userId` (quién pagó) se derivaría automáticamente de la tarjeta, lo cual
+también le ahorra una inferencia a la IA del bot.
 
 **Archivos a modificar:**
 - `prisma/schema.prisma` — agregar `payerUserId` a `CreditCard`
@@ -72,9 +68,11 @@ Ejemplo: "BBVA Pablo" → propietario: Pablo, responsable: Virginia.
 
 ### 4. Total por tarjeta con vencimiento mensual
 
-**Descripción:** Dashboard que muestre, por cada tarjeta de crédito, el monto total a pagar ese mes y su fecha de vencimiento.
+**Descripción:** Dashboard que muestre, por cada tarjeta de crédito, el monto
+total a pagar ese mes y su fecha de vencimiento.
 
-**Datos disponibles:** Modelo `CreditCard` con `closingDate`/`dueDate`. Expenses vinculadas a tarjetas.
+**Datos disponibles:** modelo `CreditCard` y `Installment.dueDate`. Falta agregarle
+a `CreditCard` la fecha de cierre y de vencimiento.
 
 **Archivos nuevos:**
 - `src/app/api/credit-cards/summary/route.ts` — endpoint de resumen mensual por tarjeta
@@ -83,121 +81,43 @@ Ejemplo: "BBVA Pablo" → propietario: Pablo, responsable: Virginia.
 
 ### 5. Separación débito vs crédito
 
-**Descripción:** En el resumen mensual, separar los montos pagados con débito (ya salió del banco) vs crédito (se cobra el mes siguiente).
+**Descripción:** En el resumen mensual, separar los montos pagados con débito (ya
+salió del banco) vs crédito (se cobra el mes siguiente).
 
-**Datos disponibles:** `CreditCard.type` o inferible del nombre.
+**Requiere:** un campo `type` en `CreditCard`.
 
 ---
 
 ### 6. Proyección crédito mes siguiente
 
-**Descripción:** Mostrar cuánto se va a cobrar el próximo mes en tarjetas de crédito (compras actuales con debitación diferida, incluyendo cuotas futuras).
+**Descripción:** Mostrar cuánto se va a cobrar el próximo mes en tarjetas de
+crédito (compras actuales con debitación diferida, incluyendo cuotas futuras).
+
+Los datos ya están: `Installment.dueDate` del mes siguiente.
 
 ---
 
 ### 7. Selector de mes histórico
 
-**Descripción:** En el resumen del grupo/compartidos, poder seleccionar cualquier mes pasado y ver la distribución para ese período. El sistema ya tiene navegación por mes en la página de gastos — aplicar el mismo patrón al resumen del grupo.
+**Descripción:** Poder seleccionar cualquier mes pasado en el dashboard y en la
+vista de la casa, y ver los totales de ese período. La página de gastos ya tiene
+navegación por mes — aplicar el mismo patrón al resto.
+
+Se cruza con la tendencia de 12 meses de la Rebanada 3.
 
 ---
 
-### 8. UI unificada — Compartidos + Grupos
+## Descartados
 
-> ⚠️ **Esta feature debe planificarse en modo plan antes de ejecutarse.**
+Dependían de grupos, splits, sueldos o balance de deudas, que ya no existen.
 
-**Objetivo:** Centralizar las vistas `/dashboard/shared` y `/dashboard/groups/[id]` en una única interfaz con métricas completas, facilitando el acceso y la visibilidad de los datos sin tener que navegar entre múltiples páginas.
-
-**Motivación:**
-- Actualmente la información está fragmentada: los gastos compartidos están en "Compartidos" y el resumen Ideal/Real está en el detalle del grupo — el usuario tiene que moverse entre dos páginas para tener el panorama completo del mes.
-- El Excel mostraba todo en una sola hoja: transacciones, resumen por persona, balance y métricas de ingreso.
-
-**Alcance tentativo:**
-- Una sola página (probablemente en `/dashboard/groups/[id]` o nueva ruta `/dashboard/home`) que combine:
-  - Resumen mensual por miembro (Ideal vs Real) — ya implementado en grupos
-  - Lista de transacciones compartidas del mes (actualmente en "Compartidos")
-  - Balance de deudas acumulado
-  - Métricas de totales: total gastado, total compartido, saldo disponible por persona
-- Selector de mes/año unificado que filtre todas las secciones a la vez
-- Posible: tabs o secciones colapsables para no sobrecargar visualmente
-
-**Dependencias:**
-- Feature #7 (selector mes histórico) debería implementarse primero o junto con este
-- Considerar si el contexto de "grupo" sigue siendo necesario o si se puede asumir un grupo principal por usuario
-
-**Requiere planificación de:**
-- Arquitectura de rutas (¿nueva ruta? ¿reemplazar una existente?)
-- Diseño de la UI (invocar skills `interface-design` y `ui-ux-pro-max`)
-- Estrategia de fetching (¿un endpoint unificado o composición de los existentes?)
-- Impacto en navegación lateral (sidebar)
-
----
-
-### 9. Invariante: gasto compartido requiere grupo
-
-**Problema actual:** `isShared` y `groupId` son campos independientes en el schema y en la API. Es posible crear un gasto con `isShared: true` y sin `groupId`, dejando datos huérfanos que nunca aparecerán en ningún resumen de grupo.
-
-**Estado del código analizado:**
-
-| Capa | Estado |
-|------|--------|
-| Schema (`prisma/schema.prisma`) | `groupId String? @db.ObjectId` — opcional, sin constraint |
-| API `POST /api/expenses` | No valida que `isShared` requiera `groupId` |
-| API `POST /api/recurring-expenses` | Mismo problema |
-| UI `expenses/page.tsx` | El checkbox `isShared` puede marcarse sin grupo seleccionado |
-
-**Cambios necesarios:**
-
-1. **API `src/app/api/expenses/route.ts`** — agregar validación en POST:
-   ```typescript
-   if (isShared && !groupId) {
-     return NextResponse.json({ error: "Un gasto compartido debe pertenecer a un grupo" }, { status: 400 });
-   }
-   ```
-
-2. **API `src/app/api/recurring-expenses/route.ts`** — misma validación.
-
-3. **UI `expenses/page.tsx`** — derivar `isShared` del `groupId` en lugar de un checkbox independiente:
-   - Cuando se selecciona un grupo → `isShared` se activa automáticamente (ya ocurre parcialmente)
-   - Cuando no hay grupo → `isShared` no puede ser `true`
-   - El checkbox puede quedar como atajo visual pero deshabilitado si `groupId` está vacío
-
-4. **Considerar** si `isShared` como campo es necesario o si se puede derivar siempre de `groupId !== null`. Si `groupId` implica compartido, el campo es redundante y puede eliminarse a futuro.
-
----
-
-### 10. Configuración automática de % por ingresos en grupos
-
-**Problema actual:** Los porcentajes de los miembros del grupo (`GroupMember.percentage`) se configuran manualmente. El resumen ya calcula `idealPercentage` en base a `MonthlyIncome`, pero los splits de cada gasto usan el `%` configurado manualmente, que puede no coincidir con la proporción real de ingresos.
-
-**Comportamiento deseado:** Que el sistema pueda derivar automáticamente los porcentajes de split a partir de los ingresos registrados (`MonthlyIncome`) del mes en curso, sin requerir configuración manual.
-
-**Opciones:**
-
-1. **Botón "Sincronizar % con ingresos"** en la página de grupos — recalcula y guarda los `GroupMember.percentage` en base al ingreso registrado del mes actual.
-2. **Modo automático** (`splitMode: "auto" | "manual"` en `Group`) — cuando está en `auto`, el backend ignora `GroupMember.percentage` y usa `MonthlyIncome` para calcular los shares en el momento de crear/editar un gasto.
-
-**Archivos a modificar (opción 2):**
-- `prisma/schema.prisma` — agregar `splitMode` a `Group`
-- `src/app/api/groups/[id]/route.ts` — exponer y actualizar `splitMode`
-- `src/app/api/expenses/route.ts` — usar ingresos para calcular shares si `splitMode === "auto"`
-- `src/app/api/recurring-expenses/route.ts` — ídem
-- `src/app/(dashboard)/dashboard/groups/page.tsx` — UI para seleccionar modo
-
----
-
-### 11. Cards métricas: balance neto unificado
-
-**Problema:** La página `/dashboard/home` mostraba 3 cards separadas: "Total compartido", "Mi parte a pagar" y "Lo que otros deben". Esto no coincidía con el Excel, donde se mostraba un solo balance neto. Además, los números no coincidían con la tabla de resumen por dos razones:
-
-1. **Bug en summary API:** los gastos recurrentes no se filtraban por mes — se sumaban todos los recurrentes del grupo (históricos y futuros), inflando el total.
-2. **Fórmulas distintas:** las cards usaban `ExpenseShare.amount` (deuda directa) mientras la tabla usaba la diferencia basada en % de ingreso (`totalPaid - idealToPay`).
-
-**Solución:**
-
-1. **Fix en `src/app/api/groups/[id]/summary/route.ts`:** filtrar recurrentes por `nextDue` dentro del mes seleccionado, igualando el comportamiento de `/api/shared`.
-2. **UI en `src/app/(dashboard)/dashboard/home/page.tsx`:** reemplazar las 2 cards (roja/verde) por una sola card "Diferencia del mes" que usa la `difference` del `memberStats` del usuario actual — misma fuente que la tabla de resumen. "Total compartido" ahora usa `totalGroupExpenses` del summary API.
-
-**Resultado:** 2 cards (Total compartido + Diferencia del mes) con números que coinciden exactamente con la tabla de resumen.
+| # | Feature | Por qué se descarta |
+|---|---------|---------------------|
+| 2 | Resumen mensual "Ideal vs Real" | Calculaba el ideal a pagar de cada uno proporcional a su `MonthlyIncome`. No hay registro de sueldos ni reparto: comparten la plata. |
+| 8 | UI unificada Compartidos + Grupos | Las dos páginas se borraron. La vista de la casa de la Rebanada 3 la reemplaza, sin noción de grupo. |
+| 9 | Invariante: gasto compartido requiere grupo | `isShared` y `groupId` no existen. `scope` los reemplaza y siempre tiene valor. |
+| 10 | Configuración automática de % por ingresos | No hay porcentajes que configurar. |
+| 11 | Cards métricas: balance neto unificado | No hay balance. |
 
 ---
 

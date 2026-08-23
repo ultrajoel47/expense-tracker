@@ -111,9 +111,13 @@ async function main() {
         amount: g.totalAmount,
         description: g.description,
         date: startDate,
+        // userId = quien pago, createdById = quien lo registro.
         userId,
+        createdById: userId,
         categoryId,
         totalInstallments: g.installments > 1 ? g.installments : null,
+        scope: "casa",
+        source: "web",
       },
     });
 
@@ -151,7 +155,7 @@ async function main() {
         frequency: "MONTHLY",
         nextDue: new Date(),
         active: true,
-        isShared: false,
+        scope: "casa",
       },
     });
     recurringCount++;
