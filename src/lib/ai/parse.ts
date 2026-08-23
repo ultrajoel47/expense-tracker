@@ -46,8 +46,7 @@ function buildSystemPrompt(ctx: ParseContext): string {
         .map(
           (a) =>
             `- "${a.pattern}" => categoria "${a.categoryName}"` +
-            (a.description ? `, descripcion "${a.description}"` : "") +
-            (a.scope ? `, scope "${a.scope}"` : "")
+            (a.description ? `, descripcion "${a.description}"` : "")
         )
         .join("\n")
     : "(todavia no hay ninguno)";
@@ -88,6 +87,11 @@ cuanto llevamos, en que se nos fue la plata, como venimos):
   "scope": "casa" | "personal" | null
 }
 
+Si el mensaje es una pregunta sobre los gastos pero no la podes traducir a ese
+objeto (no entendes de que fechas habla, o pide algo que no es un total, un
+reparto por categoria ni una tendencia):
+{ "intent": "consulta_no_soportada", "reason": "<que no pudiste entender>" }
+
 Si el mensaje no describe un gasto ni es una de esas preguntas:
 { "intent": "desconocido", "reason": "<motivo breve>" }
 
@@ -105,11 +109,12 @@ realidad fueron 15 lucas", "no, era farmacia", "cambiale la fecha a ayer"):
 }
 
 Reglas:
-- Las "Equivalencias ya conocidas" son cosas que la pareja ya corrigio a mano:
-  si la descripcion del gasto coincide con una de esas equivalencias, usa la
-  categoria (y el ambito, si lo trae) que dice la equivalencia, salvo que el
-  mensaje diga explicitamente otra cosa. Una equivalencia vale mas que tu
-  intuicion sobre el nombre del comercio, porque alguien la enseno.
+- Las "Equivalencias ya conocidas" son categorias que la pareja ya corrigio a
+  mano: si la descripcion del gasto coincide con una, usa ESA categoria salvo que
+  el mensaje diga explicitamente otra cosa. Una equivalencia vale mas que tu
+  intuicion sobre el nombre del comercio, porque alguien la enseno. Las
+  equivalencias NO dicen nada sobre el ambito: el ambito lo decidis siempre con
+  la regla de arriba.
 - Una transferencia, un pago o un "le pague a X" a una persona, un comercio o
   un alias TAMBIEN es un gasto (intent "gasto"), aunque no se compre algo
   explicito. El nombre del destinatario va en "description".
@@ -129,9 +134,10 @@ Reglas:
   referirse a alguno de los integrantes de la lista antes de asumir que es
   otra persona), el gasto es "casa".
 - Nunca inventes una categoria que no este en la lista.
-- Para la fecha, resolve expresiones como "ayer" o "el viernes" contra la
-  fecha de hoy y devolve SIEMPRE el formato YYYY-MM-DD.
-- Nunca devuelvas una fecha futura.
+- Para la fecha de un GASTO, resolve expresiones como "ayer" o "el viernes"
+  contra la fecha de hoy y devolve SIEMPRE el formato YYYY-MM-DD. Nunca
+  devuelvas una fecha futura para un gasto: nadie carga algo que todavia no
+  paso.
 - Una correccion habla de algo YA registrado y no vuelve a describir el gasto
   entero: "eso", "ese", "el ultimo", "en realidad", "no, era". En "patch" van
   SOLO los campos que la persona corrige y el resto en null. Si el mensaje
@@ -364,7 +370,12 @@ export async function parseMessage(
   }
 
   if (parsed.intent === "consulta_no_soportada") {
-    return { intent: "consulta_no_soportada" };
+    // Mismo criterio que el `reason` de "desconocido": se valida como string y,
+    // si la IA no lo mando (o lo mando con otro tipo), se omite en vez de
+    // guardar un valor a medias.
+    return typeof parsed.reason === "string"
+      ? { intent: "consulta_no_soportada", reason: parsed.reason }
+      : { intent: "consulta_no_soportada" };
   }
 
   if (parsed.intent === "consulta") {

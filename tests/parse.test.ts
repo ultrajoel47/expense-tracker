@@ -210,6 +210,24 @@ test("una pregunta devuelve consulta_no_soportada, no desconocido", async () => 
   assert.equal(r.intent, "consulta_no_soportada");
 });
 
+test("consulta_no_soportada de la IA conserva el reason cuando lo manda", async () => {
+  const provider = fakeProvider(
+    JSON.stringify({ intent: "consulta_no_soportada", reason: "no entiendo esa pregunta" })
+  );
+  const r = await parseMessage("mostrame un grafico de torta", CTX, provider);
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.equal(r.reason, "no entiendo esa pregunta");
+});
+
+test("un reason no-string de consulta_no_soportada se descarta sin romper", async () => {
+  const provider = fakeProvider(JSON.stringify({ intent: "consulta_no_soportada", reason: 123 }));
+  const r = await parseMessage("mostrame un grafico de torta", CTX, provider);
+  assert.equal(r.intent, "consulta_no_soportada");
+  if (r.intent !== "consulta_no_soportada") return;
+  assert.equal(r.reason, undefined);
+});
+
 test("un intent que no conocemos cae a desconocido", async () => {
   const provider = fakeProvider(JSON.stringify({ intent: "bailar" }));
   const r = await parseMessage("bailemos", CTX, provider);
@@ -550,7 +568,7 @@ test("un ctx.aliases no vacio aparece en el system prompt que recibe el proveedo
   const ctxConAliases: ParseContext = {
     ...CTX,
     aliases: [
-      { pattern: "juan perez", categoryName: "Comida y delivery", description: "Juan Perez", scope: null },
+      { pattern: "juan perez", categoryName: "Comida y delivery", description: "Juan Perez" },
     ],
   };
 
@@ -558,4 +576,29 @@ test("un ctx.aliases no vacio aparece en el system prompt que recibe el proveedo
   assert.ok(systemCapturado.includes("juan perez"));
   assert.ok(systemCapturado.includes("Comida y delivery"));
   assert.ok(systemCapturado.includes("Equivalencias ya conocidas"));
+});
+
+test("la seccion de Equivalencias ya conocidas no menciona el scope del alias", async () => {
+  // Item 1: un alias solo ensena categoria. La linea del alias en el prompt no
+  // puede volver a traer "scope" (aunque la palabra "scope" aparezca en OTRAS
+  // secciones del prompt, como el formato JSON de un gasto o de una consulta).
+  const ctxConAliases: ParseContext = {
+    ...CTX,
+    aliases: [
+      { pattern: "juan perez", categoryName: "Comida y delivery", description: "Juan Perez" },
+    ],
+  };
+  let systemCapturado = "";
+  const provider = {
+    complete: async (system: string, _user: string) => {
+      systemCapturado = system;
+      return JSON.stringify({ intent: "desconocido", reason: "test" });
+    },
+  };
+  await parseMessage("transferi 12 lucas a juan perez", ctxConAliases, provider);
+  const inicio = systemCapturado.indexOf("Equivalencias ya conocidas:");
+  const fin = systemCapturado.indexOf("Formato de respuesta");
+  assert.ok(inicio >= 0 && fin > inicio);
+  const seccion = systemCapturado.slice(inicio, fin);
+  assert.ok(!seccion.includes("scope"));
 });
