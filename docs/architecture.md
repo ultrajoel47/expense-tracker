@@ -190,3 +190,20 @@ el mismo pipeline que un gasto escrito.
   cambio de diseño, no de esta rebanada — y quedó anotado como pendiente para
   la próxima (agregar un test que las fije a estar de acuerdo, ejercitando el
   camino de Prisma contra una base real).
+
+  **Hay una TERCERA implementación, deliberadamente distinta y NO alineada con
+  la Enmienda 1:** `src/app/api/expenses/export/route.ts` (el CSV) filtra por
+  `date: { gte, lt }` — fecha de compra pura, la regla ANTERIOR a la Enmienda
+  1 — y no materializa recurrentes. Fue una decisión explícita de mantener el
+  alcance de esta rebanada acotado: unificar el export es un cambio de
+  semántica de lo que exporta (una fila deja de ser un gasto y pasa a ser un
+  cargo) que queda pendiente para una tarea aparte, no algo que se coló sin
+  que nadie lo mirara.
+
+  **Consecuencia, mientras esto no se corrija:** el CSV de un mes NO va a
+  coincidir con el total que muestra el dashboard para ese mismo mes (una
+  compra en cuotas se exporta entera en el mes de la compra, no repartida por
+  cuota) y **no va a incluir los gastos recurrentes** materializados ese mes
+  (el alquiler, los servicios) porque el export nunca dispara la
+  materialización. Quien exporte para chequear el dashboard va a encontrar
+  una discrepancia real, no un error de tipeo.
