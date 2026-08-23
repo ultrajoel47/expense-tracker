@@ -245,3 +245,19 @@ test("mes 13 no materializa aunque el techo ya este en 2027 (la clave '2026-13' 
 test("mes 99 no materializa (year=2026&month=99 no puede dar una clave admitida)", () => {
   assert.equal(esPeriodoMaterializable(2026, 99, new Date(2034, 8, 5)), false);
 });
+
+// ─── El techo se calcula en hora de Buenos Aires, no en la del proceso ──────
+
+test("31/08 23:00 UTC (20:00 en Buenos Aires, todavia agosto) no admite septiembre", () => {
+  // Con `new Date().getMonth()` en un proceso que corre en UTC (Vercel), este
+  // instante ya séria septiembre y el techo admitiria de mas.
+  const hoy = new Date("2026-08-31T23:00:00Z");
+  assert.equal(esPeriodoMaterializable(2026, 9, hoy), false);
+  assert.equal(esPeriodoMaterializable(2026, 8, hoy), true);
+});
+
+test("01/09 02:00 UTC (23:00 del 31/08 en Buenos Aires, todavia agosto alla) tampoco admite septiembre: este es el caso que fallaba antes del fix", () => {
+  const hoy = new Date("2026-09-01T02:00:00Z");
+  assert.equal(esPeriodoMaterializable(2026, 9, hoy), false);
+  assert.equal(esPeriodoMaterializable(2026, 8, hoy), true);
+});

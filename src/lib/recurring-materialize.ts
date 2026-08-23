@@ -1,3 +1,5 @@
+import { todayInBuenosAires } from "./ai/normalize.ts";
+
 export type MaterializeTemplate = {
   id: string;
   userId: string;
@@ -53,9 +55,15 @@ export const PRIMER_PERIODO_MATERIALIZABLE = "2026-08";
  * Verdadero si el mes pedido esta dentro de la ventana materializable:
  *
  * - PISO: `PRIMER_PERIODO_MATERIALIZABLE` (ver arriba).
- * - TECHO: el mes actual. Un mes que todavia no paso no puede tener gastos, y
- *   materializarlo congelaria el monto que la plantilla tiene HOY — que es el
- *   monto equivocado en cuanto el alquiler se indexa.
+ * - TECHO: el mes actual **en hora de Buenos Aires**, no en hora del servidor.
+ *   Produccion es Vercel, que corre en UTC; el hogar esta en UTC-3. El ultimo
+ *   dia de cada mes, entre las 21:00 y las 23:59 hora del hogar, UTC ya esta
+ *   en el mes siguiente — con `new Date().getMonth()` el techo se corria un
+ *   mes antes de que el mes real empezara y ese margen quedaba materializado
+ *   con el monto que la plantilla tenia en ESE momento. Un mes que todavia no
+ *   paso (en la zona que importa) no puede tener gastos, y materializarlo
+ *   congelaria el monto que la plantilla tiene HOY — que es el monto
+ *   equivocado en cuanto el alquiler se indexa.
  *
  * Se compara con los strings de `periodKey`, no con numeros: el mes viene con
  * dos digitos y el año con cuatro, asi que el orden lexicografico es el orden
@@ -67,9 +75,10 @@ export const PRIMER_PERIODO_MATERIALIZABLE = "2026-08";
  * 2027 ("2027-01"), asi que el alquiler de ese mes se crearia dos veces. Por
  * eso el mes se valida por RANGO antes de armar la clave, no despues.
  *
- * `hoy` es un parametro para que los tests puedan fijar el techo; en
- * produccion se usa el reloj. Se lee en hora local, igual que el resto del
- * repo (`new Date().getMonth() + 1` en los route handlers).
+ * `hoy` es un parametro (instante UTC, tipicamente `new Date()`) para que los
+ * tests puedan fijar el techo. El techo mismo se calcula en hora de Buenos
+ * Aires via `todayInBuenosAires` (`./ai/normalize.ts`, un modulo sin imports),
+ * no en la hora local del proceso que corre esta funcion.
  */
 export function esPeriodoMaterializable(
   year: number,
@@ -85,7 +94,10 @@ export function esPeriodoMaterializable(
 
   const periodo = periodKey(year, month);
   if (periodo < PRIMER_PERIODO_MATERIALIZABLE) return false;
-  if (periodo > periodKey(hoy.getFullYear(), hoy.getMonth() + 1)) return false;
+  // "YYYY-MM-DD" en Buenos Aires, recortado a "YYYY-MM": mismo formato que
+  // periodKey. Nunca la hora local del proceso (Vercel corre en UTC).
+  const techo = todayInBuenosAires(hoy).slice(0, 7);
+  if (periodo > techo) return false;
   return true;
 }
 
