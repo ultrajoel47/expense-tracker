@@ -31,7 +31,11 @@ interface Expense {
   creditCard: CreditCard | null;
   totalInstallments: number | null;
   installments: Installment[];
+  scope: "casa" | "personal";
+  payer: { id: string; name: string };
 }
+
+type ScopeFilter = "todos" | "casa" | "personal";
 
 const emptyForm = {
   amount: "",
@@ -59,6 +63,8 @@ export default function ExpensesPage() {
   const [filterYear, setFilterYear] = useState(() => new Date().getFullYear());
   const [rawDesc, setRawDesc] = useState("");
   const [filterDesc, setFilterDesc] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("todos");
+  const [scope, setScope] = useState<"casa" | "personal">("casa");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -79,12 +85,12 @@ export default function ExpensesPage() {
   // Reset to page 1 when any filter changes
   useEffect(() => {
     setPage(1);
-  }, [filterMonth, filterYear, filterCat, filterDesc]);
+  }, [filterMonth, filterYear, filterCat, filterDesc, scopeFilter]);
 
   // Load expenses when page or filters change
   useEffect(() => {
     loadExpenses();
-  }, [filterMonth, filterYear, filterCat, filterDesc, page]);
+  }, [filterMonth, filterYear, filterCat, filterDesc, scopeFilter, page]);
 
   function loadExpenses() {
     const params = new URLSearchParams();
@@ -92,6 +98,7 @@ export default function ExpensesPage() {
     params.set("year", String(filterYear));
     if (filterCat) params.set("categoryId", filterCat);
     if (filterDesc.trim()) params.set("description", filterDesc.trim());
+    if (scopeFilter !== "todos") params.set("scope", scopeFilter);
     params.set("page", String(page));
     params.set("limit", String(LIMIT));
     fetch(`/api/expenses?${params}`)
@@ -129,6 +136,7 @@ export default function ExpensesPage() {
         amount: Number(form.amount),
         totalInstallments: Number(form.totalInstallments) > 1 ? Number(form.totalInstallments) : null,
         creditCardId: form.creditCardId || null,
+        scope,
       };
 
       if (editId !== null) {
@@ -146,6 +154,7 @@ export default function ExpensesPage() {
         });
       }
       setForm(emptyForm);
+      setScope("casa");
       loadExpenses();
     } finally {
       setLoading(false);
@@ -173,6 +182,7 @@ export default function ExpensesPage() {
       creditCardId: exp.creditCard?.id ?? "",
       totalInstallments: String(exp.totalInstallments ?? 1),
     });
+    setScope(exp.scope);
   }
 
   const installmentPreview = (() => {
@@ -325,6 +335,16 @@ export default function ExpensesPage() {
           )}
 
           {/* Submit row */}
+          <div className="flex flex-wrap items-center gap-4 pt-1">
+            <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={scope === "personal"}
+                onChange={(e) => setScope(e.target.checked ? "personal" : "casa")}
+              />
+              Gasto personal (no lo ve la otra persona)
+            </label>
+          </div>
           <div className="flex items-center gap-2 pt-1">
             <button
               type="submit"
@@ -336,7 +356,7 @@ export default function ExpensesPage() {
             {editId !== null && (
               <button
                 type="button"
-                onClick={() => { setEditId(null); setForm(emptyForm); }}
+                onClick={() => { setEditId(null); setForm(emptyForm); setScope("casa"); }}
                 className="px-5 py-2 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition"
               >
                 Cancelar
@@ -400,6 +420,23 @@ export default function ExpensesPage() {
               onChange={(e) => setRawDesc(e.target.value)}
               className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 min-w-[160px]"
             />
+            {/* Scope filter */}
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+              {(["todos", "casa", "personal"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setScopeFilter(value)}
+                  className={`rounded-md px-3 py-1.5 text-sm capitalize transition ${
+                    scopeFilter === value
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-gray-700 dark:text-indigo-400"
+                      : "text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -436,6 +473,9 @@ export default function ExpensesPage() {
                       )}
                       <span className="text-xs text-gray-400 dark:text-gray-500">
                         · {new Date(exp.date).toLocaleDateString("es")}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {exp.scope === "casa" ? "Casa" : "Personal"} · {exp.payer.name}
                       </span>
                     </div>
                   </div>

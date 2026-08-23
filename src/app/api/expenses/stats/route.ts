@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { visibleExpensesWhere } from "@/lib/visibility";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -16,7 +17,7 @@ export async function GET(req: Request) {
   // Current month expenses
   const expenses = await prisma.expense.findMany({
     where: {
-      userId: session.id,
+      ...visibleExpensesWhere(session.id),
       date: { gte: startDate, lt: endDate },
     },
     include: { category: true },
@@ -27,7 +28,7 @@ export async function GET(req: Request) {
   const prevStart = new Date(Date.UTC(year, month - 2, 1));
   const prevEnd = new Date(Date.UTC(year, month - 1, 1));
   const prevExpenses = await prisma.expense.findMany({
-    where: { userId: session.id, date: { gte: prevStart, lt: prevEnd } },
+    where: { ...visibleExpensesWhere(session.id), date: { gte: prevStart, lt: prevEnd } },
   });
   const prevTotal = prevExpenses.reduce((s: number, e: any) => s + e.amount, 0);
 
@@ -95,7 +96,7 @@ export async function GET(req: Request) {
   let allTimeRecent: typeof recentExpenses = [];
   if (expenses.length === 0) {
     const latest = await prisma.expense.findMany({
-      where: { userId: session.id },
+      where: { ...visibleExpensesWhere(session.id) },
       include: { category: true },
       orderBy: { date: "desc" },
       take: 10,
@@ -114,7 +115,7 @@ export async function GET(req: Request) {
     by: ["expenseId"],
     where: {
       paid: false,
-      expense: { userId: session.id, creditCardId: { not: null } },
+      expense: { ...visibleExpensesWhere(session.id), creditCardId: { not: null } },
     },
     _sum: { amount: true },
   });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { visibleExpensesWhere } from "@/lib/visibility";
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -8,7 +9,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   const { id } = await params;
 
-  const expense = await prisma.expense.findFirst({ where: { id, userId: session.id } });
+  const expense = await prisma.expense.findFirst({
+    where: { id, ...visibleExpensesWhere(session.id) },
+  });
   if (!expense) return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
 
   await prisma.installment.deleteMany({ where: { expenseId: id } });
@@ -22,7 +25,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const { id } = await params;
 
-  const expense = await prisma.expense.findFirst({ where: { id, userId: session.id } });
+  const expense = await prisma.expense.findFirst({
+    where: { id, ...visibleExpensesWhere(session.id) },
+  });
   if (!expense) return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
 
   const body = await req.json();
@@ -35,6 +40,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       date: body.date ? new Date(body.date) : undefined,
       categoryId: body.categoryId || undefined,
       creditCardId: body.creditCardId !== undefined ? body.creditCardId || null : undefined,
+      // scope es reclasificable (casa <-> personal); userId/createdById/source
+      // no se tocan aca: son identidad/procedencia, no se reasignan al editar.
+      scope: body.scope === "personal" || body.scope === "casa" ? body.scope : undefined,
     },
     include: { category: true },
   });
