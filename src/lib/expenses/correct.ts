@@ -17,13 +17,22 @@ export type CorrectableExpense = {
 };
 
 /**
- * El cliente que ve el CUERPO de una transaccion de cuotas: sin
- * `$transaction` (para que no se pueda anidar una transaccion dentro de
- * otra) y con `installment.upsert`, que es lo que permite reconstruir las
- * cuotas preservando `paid`/`paidAt` en vez de borrar y recrear. Ver el
- * comentario de `rebuildInstallments`.
+ * El cliente que ve el CUERPO de una transaccion: sin `$transaction` (para que
+ * no se pueda anidar una transaccion dentro de otra) y con
+ * `installment.upsert`, que es lo que permite reconstruir las cuotas
+ * preservando `paid`/`paidAt` en vez de borrar y recrear (ver el comentario de
+ * `rebuildInstallments`).
+ *
+ * `applyCorrection` y `deleteExpenseWithInstallments` reciben este mismo tipo
+ * porque las dos abren su propia transaccion y hacen TODAS sus escrituras a
+ * traves de ella: si el segundo paso de cualquiera de las dos fallara, el
+ * primero no puede quedar aplicado solo.
  */
 type CorrectTxClient = {
+  expense: {
+    update(args: unknown): Promise<unknown>;
+    delete(args: { where: { id: string } }): Promise<unknown>;
+  };
   installment: {
     upsert(args: {
       where: {
@@ -51,9 +60,7 @@ type CorrectTxClient = {
 export type CorrectClient = {
   expense: {
     findFirst(args: unknown): Promise<CorrectableExpense | null>;
-    update(args: unknown): Promise<unknown>;
-    delete(args: { where: { id: string } }): Promise<unknown>;
-  };
+  } & CorrectTxClient["expense"];
   installment: CorrectTxClient["installment"];
   $transaction<T>(fn: (tx: CorrectTxClient) => Promise<T>): Promise<T>;
 };
@@ -130,6 +137,16 @@ export type CorrectedExpense = {
  *
  * El permiso NO se chequea aca: es `canEditViaBot` en `src/lib/visibility.ts`,
  * y lo aplica quien llama, antes. Esta funcion escribe.
+ *
+ * **El `update` del gasto y la reconstruccion de cuotas corren en UNA sola
+ * transaccion.** Antes eran dos escrituras sueltas: si el rebuild fallaba (un
+ * timeout, un cold start de Vercel), el monto ya habia cambiado pero las
+ * cuotas quedaban con el valor viejo — exactamente el bug que
+ * `rebuildInstallments` existe para evitar, y con el bot ya habiendo
+ * contestado que todo salio bien. Con la transaccion, un fallo en cualquiera
+ * de los dos pasos deja el `Expense` exactamente como estaba: nada escrito, no
+ * una escritura a medias. Eso es tambien la mitad de C1 (ver el comentario de
+ * cabecera de las tres regiones en el webhook).
  */
 export async function applyCorrection(
   client: CorrectClient,
@@ -149,19 +166,20 @@ export async function applyCorrection(
     categoryId,
   };
 
-  await client.expense.update({ where: { id: expense.id }, data: merged });
-
   const cambioElMonto = merged.amount !== expense.amount;
   const cambioLaFecha = merged.date.getTime() !== expense.date.getTime();
-  if (expense.totalInstallments && (cambioElMonto || cambioLaFecha)) {
-    await rebuildInstallments(
-      client,
-      expense.id,
-      merged.date,
-      merged.amount,
-      expense.totalInstallments
-    );
-  }
+
+  await client.$transaction(async (tx) => {
+    await tx.expense.update({ where: { id: expense.id }, data: merged });
+
+    if (expense.totalInstallments && (cambioElMonto || cambioLaFecha)) {
+      // `tx`, no `client`: ya estamos DENTRO de la transaccion que abrimos
+      // arriba. Llamar a `rebuildInstallments` (la exportada) anidaria un
+      // `$transaction` dentro de otro; por eso el cuerpo vive aparte en
+      // `rebuildInstallmentsTx`, que solo pide lo que un `tx` ya tiene.
+      await rebuildInstallmentsTx(tx, expense.id, merged.date, merged.amount, expense.totalInstallments);
+    }
+  });
 
   return merged;
 }
@@ -187,6 +205,8 @@ export async function applyCorrection(
  *
  * Se exporta porque el PUT de la web (`src/app/api/expenses/[id]/route.ts`) no
  * tiene su propia transaccion abierta: esta es la que la abre para el.
+ * `applyCorrection`, en cambio, ya esta DENTRO de su propia transaccion, asi
+ * que llama a `rebuildInstallmentsTx` directo — ver el comentario ahi.
  */
 export async function rebuildInstallments(
   client: Pick<CorrectClient, "$transaction">,
@@ -195,28 +215,43 @@ export async function rebuildInstallments(
   total: number,
   count: number
 ): Promise<void> {
+  await client.$transaction((tx) => rebuildInstallmentsTx(tx, expenseId, date, total, count));
+}
+
+/**
+ * El cuerpo de `rebuildInstallments`, para un cliente que YA es transaccional.
+ * No exportada: el unico motivo para llamarla directo en vez de
+ * `rebuildInstallments` es estar corriendo dentro de una transaccion propia
+ * (`applyCorrection`), y anidar `$transaction` dentro de `$transaction` no es
+ * lo que se quiere ahi.
+ */
+async function rebuildInstallmentsTx(
+  tx: Pick<CorrectTxClient, "installment">,
+  expenseId: string,
+  date: Date,
+  total: number,
+  count: number
+): Promise<void> {
   const rows = buildInstallments(date, total, count);
 
-  await client.$transaction(async (tx) => {
-    for (const row of rows) {
-      await tx.installment.upsert({
-        where: {
-          expenseId_installmentNumber: {
-            expenseId,
-            installmentNumber: row.installmentNumber,
-          },
+  for (const row of rows) {
+    await tx.installment.upsert({
+      where: {
+        expenseId_installmentNumber: {
+          expenseId,
+          installmentNumber: row.installmentNumber,
         },
-        create: { ...row, expenseId },
-        update: { amount: row.amount, dueDate: row.dueDate },
-      });
-    }
-
-    // Si el gasto quedo con menos cuotas que antes, sobran filas. Con
-    // `rows.length === 0` (un gasto que dejo de ser en cuotas) esto borra
-    // todas, porque los numeros empiezan en 1.
-    await tx.installment.deleteMany({
-      where: { expenseId, installmentNumber: { gt: rows.length } },
+      },
+      create: { ...row, expenseId },
+      update: { amount: row.amount, dueDate: row.dueDate },
     });
+  }
+
+  // Si el gasto quedo con menos cuotas que antes, sobran filas. Con
+  // `rows.length === 0` (un gasto que dejo de ser en cuotas) esto borra
+  // todas, porque los numeros empiezan en 1.
+  await tx.installment.deleteMany({
+    where: { expenseId, installmentNumber: { gt: rows.length } },
   });
 }
 
@@ -224,11 +259,18 @@ export async function rebuildInstallments(
  * Borra un gasto y sus cuotas. Mongo no tiene cascade: sin el deleteMany, las
  * filas de `Installment` quedan huerfanas apuntando a un gasto inexistente.
  * Mismo orden que el DELETE de la web (`src/app/api/expenses/[id]/route.ts`).
+ *
+ * En una transaccion: si el `delete` del gasto fallara despues del
+ * `deleteMany` de las cuotas, el gasto quedaria vivo con
+ * `totalInstallments > 1` y cero filas de cuota — desaparecido de todos los
+ * totales del dashboard pero todavia visible en el listado.
  */
 export async function deleteExpenseWithInstallments(
   client: CorrectClient,
   expenseId: string
 ): Promise<void> {
-  await client.installment.deleteMany({ where: { expenseId } });
-  await client.expense.delete({ where: { id: expenseId } });
+  await client.$transaction(async (tx) => {
+    await tx.installment.deleteMany({ where: { expenseId } });
+    await tx.expense.delete({ where: { id: expenseId } });
+  });
 }

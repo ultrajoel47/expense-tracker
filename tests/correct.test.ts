@@ -21,22 +21,21 @@ type FilaFalsa = {
  * `installmentsStore` simula la tabla real (una fila por expenseId +
  * installmentNumber, con `paid`/`paidAt`) para poder verificar que el upsert
  * preserva el estado de pago, no solo que se llamo con ciertos argumentos.
- * `$transaction` corre el callback contra el mismo `installment`/`expense`
- * que ve el cliente de afuera: alcanza para probar el efecto de la
- * reconstruccion en este commit; el test que prueba que las escrituras van
- * POR el `tx` y no por el cliente de afuera se agrega junto con la
- * transaccion propia de `applyCorrection`/`deleteExpenseWithInstallments`.
+ *
+ * Las llamadas "de afuera" (`client.expense.*`, `client.installment.*`) y las
+ * "de adentro" (lo que recibe el callback de `$transaction`) se cuentan en
+ * buckets SEPARADOS a proposito: es lo que permite comprobar que
+ * `applyCorrection` y `deleteExpenseWithInstallments` escriben a traves del
+ * `tx` y no del cliente de afuera. Las dos rutas mutan el mismo
+ * `installmentsStore`, asi que el efecto sobre los datos es identico —
+ * solo el bucket que queda tocado cambia.
  */
 function clienteFalso(
   opts: { findFirstResult?: CorrectableExpense | null; installments?: FilaFalsa[] } = {}
 ) {
-  const llamadas = {
-    findFirst: [] as any[],
-    update: [] as any[],
-    delete: [] as any[],
-    deleteMany: [] as any[],
-    upsert: [] as any[],
-  };
+  const fuera = { update: [] as any[], delete: [] as any[], deleteMany: [] as any[], upsert: [] as any[] };
+  const dentro = { update: [] as any[], delete: [] as any[], deleteMany: [] as any[], upsert: [] as any[] };
+  const findFirst: any[] = [];
 
   const installmentsStore = new Map<string, any>();
   for (const row of opts.installments ?? []) {
@@ -47,56 +46,75 @@ function clienteFalso(
     });
   }
 
-  const installmentOps = {
-    upsert: async (args: any) => {
-      llamadas.upsert.push(args);
-      const { expenseId, installmentNumber } = args.where.expenseId_installmentNumber;
-      const key = `${expenseId}:${installmentNumber}`;
-      const existing = installmentsStore.get(key);
-      if (existing) {
-        Object.assign(existing, args.update);
-        return existing;
-      }
-      const created = { ...args.create, paid: false, paidAt: null };
-      installmentsStore.set(key, created);
-      return created;
-    },
-    deleteMany: async (args: any) => {
-      llamadas.deleteMany.push(args);
-      const { expenseId, installmentNumber } = args.where;
-      for (const [key, row] of [...installmentsStore.entries()]) {
-        if (row.expenseId !== expenseId) continue;
-        if (installmentNumber?.gt !== undefined && row.installmentNumber <= installmentNumber.gt) continue;
-        installmentsStore.delete(key);
-      }
-      return {};
-    },
-  };
+  function installmentOps(bucket: typeof fuera) {
+    return {
+      upsert: async (args: any) => {
+        bucket.upsert.push(args);
+        const { expenseId, installmentNumber } = args.where.expenseId_installmentNumber;
+        const key = `${expenseId}:${installmentNumber}`;
+        const existing = installmentsStore.get(key);
+        if (existing) {
+          Object.assign(existing, args.update);
+          return existing;
+        }
+        const created = { ...args.create, paid: false, paidAt: null };
+        installmentsStore.set(key, created);
+        return created;
+      },
+      deleteMany: async (args: any) => {
+        bucket.deleteMany.push(args);
+        const { expenseId, installmentNumber } = args.where;
+        for (const [key, row] of [...installmentsStore.entries()]) {
+          if (row.expenseId !== expenseId) continue;
+          if (installmentNumber?.gt !== undefined && row.installmentNumber <= installmentNumber.gt) continue;
+          installmentsStore.delete(key);
+        }
+        return {};
+      },
+    };
+  }
 
-  const expenseOps = {
-    update: async (args: any) => {
-      llamadas.update.push(args);
-      return {};
-    },
-    delete: async (args: any) => {
-      llamadas.delete.push(args);
-      return {};
-    },
-  };
+  function expenseOps(bucket: typeof fuera) {
+    return {
+      update: async (args: any) => {
+        bucket.update.push(args);
+        return {};
+      },
+      delete: async (args: any) => {
+        bucket.delete.push(args);
+        return {};
+      },
+    };
+  }
 
   const client = {
     expense: {
       findFirst: async (args: any) => {
-        llamadas.findFirst.push(args);
+        findFirst.push(args);
         return opts.findFirstResult ?? null;
       },
-      ...expenseOps,
+      ...expenseOps(fuera),
     },
-    installment: installmentOps,
-    $transaction: async (fn: any) => fn({ expense: expenseOps, installment: installmentOps }),
+    installment: installmentOps(fuera),
+    $transaction: async (fn: any) => fn({ expense: expenseOps(dentro), installment: installmentOps(dentro) }),
   };
 
-  return { client, llamadas, installmentsStore };
+  const llamadas = {
+    get findFirst() {
+      return findFirst;
+    },
+    get update() {
+      return dentro.update;
+    },
+    get upsert() {
+      return dentro.upsert;
+    },
+    get deleteMany() {
+      return dentro.deleteMany;
+    },
+  };
+
+  return { client, llamadas, fuera, dentro, installmentsStore };
 }
 
 const GASTO_BASE: CorrectableExpense = {
@@ -301,29 +319,66 @@ test("corregir solo la fecha de un gasto en cuotas si las reconstruye, y la prim
   assert.equal(fila1.dueDate.getUTCMonth(), 10); // noviembre, 0-indexado
 });
 
+test("applyCorrection escribe el update del gasto y el rebuild de cuotas a traves del tx, nunca del cliente de afuera", async () => {
+  const gastoEnCuotas: CorrectableExpense = {
+    ...GASTO_BASE,
+    amount: 300000,
+    totalInstallments: 3,
+  };
+  const { client, fuera, dentro } = clienteFalso();
+  await applyCorrection(client, gastoEnCuotas, { amount: 150000 }, CATEGORIAS);
+
+  assert.equal(fuera.update.length, 0);
+  assert.equal(fuera.upsert.length, 0);
+  assert.equal(fuera.deleteMany.length, 0);
+  assert.equal(dentro.update.length, 1);
+  assert.equal(dentro.upsert.length, 3);
+});
+
 // ─── deleteExpenseWithInstallments ───────────────────────────────────────────
 
-test("deleteExpenseWithInstallments borra las cuotas antes que el gasto", async () => {
+test("deleteExpenseWithInstallments borra las cuotas antes que el gasto, dentro del tx", async () => {
   const orden: string[] = [];
   const client = {
     expense: {
       findFirst: async () => null,
       update: async () => ({}),
-      delete: async (args: any) => {
-        orden.push("expense.delete:" + args.where.id);
-        return {};
+      delete: async () => {
+        throw new Error("no deberia llamarse por fuera de la transaccion");
       },
     },
     installment: {
-      deleteMany: async (args: any) => {
-        orden.push("installment.deleteMany:" + args.where.expenseId);
-        return {};
+      deleteMany: async () => {
+        throw new Error("no deberia llamarse por fuera de la transaccion");
       },
       upsert: async () => ({}),
     },
-    $transaction: async (fn: any) => fn(client),
+    $transaction: async (fn: any) =>
+      fn({
+        expense: {
+          delete: async (args: any) => {
+            orden.push("expense.delete:" + args.where.id);
+            return {};
+          },
+        },
+        installment: {
+          deleteMany: async (args: any) => {
+            orden.push("installment.deleteMany:" + args.where.expenseId);
+            return {};
+          },
+        },
+      }),
   };
 
   await deleteExpenseWithInstallments(client as any, "exp-1");
   assert.deepEqual(orden, ["installment.deleteMany:exp-1", "expense.delete:exp-1"]);
+});
+
+test("deleteExpenseWithInstallments escribe a traves del tx, nunca del cliente de afuera", async () => {
+  const { client, fuera, dentro } = clienteFalso();
+  await deleteExpenseWithInstallments(client, "exp-1");
+  assert.equal(fuera.delete.length, 0);
+  assert.equal(fuera.deleteMany.length, 0);
+  assert.equal(dentro.delete.length, 1);
+  assert.equal(dentro.deleteMany.length, 1);
 });
