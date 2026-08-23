@@ -20,7 +20,7 @@ hablen de eso, es residuo: reportalo.
 - **Tailwind CSS** — estilos
 - **Recharts** — gráficos del dashboard
 - **Telegram Bot API** — canal de ingesta
-- **Grok (xAI)** — parseo de los mensajes, detrás de la interfaz `AiProvider`
+- **Groq o Grok (xAI)** — parseo de los mensajes, detrás de la interfaz `AiProvider`; se elige con `AI_PROVIDER` (default `groq`)
 - **Tesseract** — OCR de comprobantes, detrás de la interfaz `OcrEngine`
 
 ## Convenciones de código

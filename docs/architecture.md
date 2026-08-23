@@ -13,7 +13,7 @@ Telegram; la web consulta y corrige.
 | Auth | JWT custom (`src/lib/auth.ts`), cookie httpOnly |
 | Charts | Recharts |
 | Ingesta | Telegram Bot API (webhook) |
-| IA | Grok (xAI), detrás de `AiProvider` |
+| IA | Groq o Grok (xAI), seleccionable con `AI_PROVIDER`, detrás de `AiProvider` |
 | OCR | Tesseract, detrás de `OcrEngine` |
 
 ## Estructura de carpetas
@@ -98,8 +98,10 @@ chequeo y carga el gasto dos veces.
 
 ### `src/lib/ai/` — el parseo del mensaje
 
-- `provider.ts` — la interfaz `AiProvider`.
-- `grok.ts` — la implementación con xAI.
+- `provider.ts` — la interfaz `AiProvider` y `getAiProvider()`, que elige la
+  implementación según `AI_PROVIDER` (`"groq"`, default, o `"grok"`).
+- `groq.ts` — la implementación con Groq (API compatible con OpenAI).
+- `grok.ts` — la implementación con xAI, queda como alternativa.
 - `parse.ts` — `parseMessage` y el prompt.
 - `types.ts` — `ParseContext` y `ParseResult`.
 
@@ -107,7 +109,10 @@ chequeo y carga el gasto dos veces.
 normalización de montos y fechas ("12 lucas", "2 palos", `12.500` vs `12.50`,
 "ayer", "el viernes pasado") y las agregaciones de las consultas se hacen en
 código. El LLM inventa totales; el código no. El seam existe para poder cambiar
-de proveedor, y porque el free tier puede no alcanzar.
+de proveedor, y porque el free tier puede no alcanzar — y esto se validó en la
+práctica, no en teoría: el primer proveedor elegido (xAI/Grok) resultó no tener
+free tier, y cambiarlo por Groq costó agregar un solo archivo (`groq.ts`) más
+una rama en `getAiProvider()`, sin tocar `parse.ts` ni los tests.
 
 ### `src/lib/ocr/` — los comprobantes por foto
 
