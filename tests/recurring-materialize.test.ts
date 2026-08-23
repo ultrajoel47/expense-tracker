@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { materializeRecurringForMonth, periodKey } from "../src/lib/recurring-materialize.ts";
+import {
+  materializeRecurringForMonth,
+  periodKey,
+  esPeriodoMaterializable,
+  PRIMER_PERIODO_MATERIALIZABLE,
+} from "../src/lib/recurring-materialize.ts";
 
 function clienteFalso(plantillas: any[], yaExistentes: string[] = []) {
   const creados: any[] = [];
@@ -45,48 +50,50 @@ test("periodKey es el año-mes con dos digitos", () => {
 
 test("crea un Expense por plantilla activa", async () => {
   const { client, creados } = clienteFalso([ALQUILER]);
-  const n = await materializeRecurringForMonth(client as any, 2026, 3);
+  const n = await materializeRecurringForMonth(client as any, 2026, 8);
   assert.equal(n, 1);
   assert.equal(creados[0].amount, 500000);
   assert.equal(creados[0].description, "Alquiler");
   assert.equal(creados[0].scope, "casa");
   assert.equal(creados[0].source, "recurring");
-  assert.equal(creados[0].recurringPeriod, "2026-03");
+  assert.equal(creados[0].recurringPeriod, "2026-08");
 });
 
 test("el pagador y el creador son el userId de la plantilla", async () => {
   const { client, creados } = clienteFalso([ALQUILER]);
-  await materializeRecurringForMonth(client as any, 2026, 3);
+  await materializeRecurringForMonth(client as any, 2026, 8);
   assert.equal(creados[0].userId, "u1");
   assert.equal(creados[0].createdById, "u1");
 });
 
 test("es idempotente: no duplica si ya existe el periodo", async () => {
-  const { client, creados } = clienteFalso([ALQUILER], ["rec-1:2026-03"]);
-  const n = await materializeRecurringForMonth(client as any, 2026, 3);
+  const { client, creados } = clienteFalso([ALQUILER], ["rec-1:2026-08"]);
+  const n = await materializeRecurringForMonth(client as any, 2026, 8);
   assert.equal(n, 0);
   assert.equal(creados.length, 0);
 });
 
 test("dos corridas seguidas crean una sola vez", async () => {
   const { client, creados } = clienteFalso([ALQUILER]);
-  await materializeRecurringForMonth(client as any, 2026, 3);
-  await materializeRecurringForMonth(client as any, 2026, 3);
+  await materializeRecurringForMonth(client as any, 2026, 8);
+  await materializeRecurringForMonth(client as any, 2026, 8);
   assert.equal(creados.length, 1);
 });
 
 test("no materializa un mes anterior a la creacion de la plantilla", async () => {
-  const nueva = { ...ALQUILER, createdAt: new Date(Date.UTC(2026, 5, 1)) };
+  // Plantilla creada MUY despues del mes pedido: el guard que se ejercita aca
+  // es el de `createdAt`, no el del piso (2026-08 esta dentro de los limites).
+  const nueva = { ...ALQUILER, createdAt: new Date(Date.UTC(2030, 0, 1)) };
   const { client, creados } = clienteFalso([nueva]);
-  const n = await materializeRecurringForMonth(client as any, 2026, 3);
+  const n = await materializeRecurringForMonth(client as any, 2026, 8);
   assert.equal(n, 0, "no puede inventar un alquiler de antes de que existiera la plantilla");
   assert.equal(creados.length, 0);
 });
 
 test("la fecha del gasto es el dia 1 del periodo, a mediodia UTC", async () => {
   const { client, creados } = clienteFalso([ALQUILER]);
-  await materializeRecurringForMonth(client as any, 2026, 3);
-  assert.equal(creados[0].date.toISOString(), "2026-03-01T12:00:00.000Z");
+  await materializeRecurringForMonth(client as any, 2026, 8);
+  assert.equal(creados[0].date.toISOString(), "2026-08-01T12:00:00.000Z");
 });
 
 test("una violacion P2002 concurrente (dos lecturas a la vez) se cuenta como 'ya existe', no revienta ni aborta el resto del lote", async () => {
@@ -115,7 +122,7 @@ test("una violacion P2002 concurrente (dos lecturas a la vez) se cuenta como 'ya
     },
   };
 
-  const n = await materializeRecurringForMonth(client as any, 2026, 3);
+  const n = await materializeRecurringForMonth(client as any, 2026, 8);
 
   assert.equal(n, 1, "la plantilla que choco no cuenta como creada por esta llamada");
   assert.equal(creados.length, 1, "la siguiente plantilla del lote se sigue procesando");
@@ -131,7 +138,90 @@ test("un error que no es P2002 se relanza, no se confunde con 'ya existe'", asyn
   };
 
   await assert.rejects(
-    () => materializeRecurringForMonth(client as any, 2026, 3),
+    () => materializeRecurringForMonth(client as any, 2026, 8),
     /conexion caida/
   );
+});
+
+// ─── Limites temporales (piso y techo) ──────────────────────────────────────
+
+test("no materializa un mes futuro: un mes que no paso no puede tener gastos", async () => {
+  const { client, creados } = clienteFalso([ALQUILER]);
+  const hoy = new Date();
+  const n = await materializeRecurringForMonth(client as any, hoy.getFullYear() + 1, 1);
+  assert.equal(n, 0, "un click en la flecha '→' no puede crear el alquiler de un mes futuro");
+  assert.equal(creados.length, 0);
+});
+
+test("no materializa el mes que viene (el limite es el mes actual, no el año)", async () => {
+  const { client, creados } = clienteFalso([ALQUILER]);
+  const hoy = new Date();
+  const siguiente = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
+  const n = await materializeRecurringForMonth(
+    client as any,
+    siguiente.getFullYear(),
+    siguiente.getMonth() + 1
+  );
+  assert.equal(n, 0);
+  assert.equal(creados.length, 0);
+});
+
+test("no materializa un mes anterior al piso: esos meses ya tienen los recurrentes cargados a mano", async () => {
+  const { client, creados } = clienteFalso([ALQUILER]);
+  // 2026-03 es el mes en que se crearon las 10 plantillas reales Y ya contiene
+  // el alquiler y los servicios cargados a mano. Materializarlo duplicaria.
+  const n = await materializeRecurringForMonth(client as any, 2026, 3);
+  assert.equal(n, 0, "materializar antes del piso duplicaria los recurrentes cargados a mano");
+  assert.equal(creados.length, 0);
+});
+
+test("el piso es un mes fijo, no la creacion de la plantilla", async () => {
+  // Plantilla creada en 2025: aun asi 2026-07 (antes del piso) no se materializa.
+  const vieja = { ...ALQUILER, createdAt: new Date(Date.UTC(2024, 0, 1)) };
+  const { client, creados } = clienteFalso([vieja]);
+  const n = await materializeRecurringForMonth(client as any, 2026, 7);
+  assert.equal(n, 0);
+  assert.equal(creados.length, 0);
+});
+
+test("el mes del piso (2026-08) si se materializa", async () => {
+  const { client, creados } = clienteFalso([ALQUILER]);
+  const n = await materializeRecurringForMonth(client as any, 2026, 8);
+  assert.equal(n, 1);
+  assert.equal(creados[0].recurringPeriod, "2026-08");
+});
+
+test("el mes actual sigue materializando como antes", async () => {
+  const { client, creados } = clienteFalso([ALQUILER]);
+  const hoy = new Date();
+  const n = await materializeRecurringForMonth(client as any, hoy.getFullYear(), hoy.getMonth() + 1);
+  assert.equal(n, 1, "el mes en curso es el caso normal: tiene que seguir creando");
+  assert.equal(creados.length, 1);
+  assert.equal(creados[0].recurringPeriod, periodKey(hoy.getFullYear(), hoy.getMonth() + 1));
+});
+
+test("un mes fuera de 1-12 no crea nada (defensa en profundidad ante un mes sin validar)", async () => {
+  for (const mes of [0, 13, 99, -1]) {
+    const { client, creados } = clienteFalso([ALQUILER]);
+    const n = await materializeRecurringForMonth(client as any, 2026, mes);
+    assert.equal(n, 0, `mes ${mes} no puede materializar`);
+    assert.equal(creados.length, 0, `mes ${mes} no puede materializar`);
+  }
+});
+
+test("un año absurdo no crea nada", async () => {
+  for (const anio of [999, 10000, NaN]) {
+    const { client, creados } = clienteFalso([ALQUILER]);
+    const n = await materializeRecurringForMonth(client as any, anio, 8);
+    assert.equal(n, 0, `año ${anio} no puede materializar`);
+    assert.equal(creados.length, 0, `año ${anio} no puede materializar`);
+  }
+});
+
+test("periodoMaterializable expone los limites para los tests y los llamadores", () => {
+  assert.equal(PRIMER_PERIODO_MATERIALIZABLE, "2026-08");
+  assert.equal(esPeriodoMaterializable(2026, 7), false);
+  assert.equal(esPeriodoMaterializable(2026, 8, new Date(2026, 7, 23)), true);
+  assert.equal(esPeriodoMaterializable(2026, 9, new Date(2026, 7, 23)), false);
+  assert.equal(esPeriodoMaterializable(2026, 8, new Date(2027, 0, 5)), true);
 });

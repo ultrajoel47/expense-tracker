@@ -29,6 +29,56 @@ export function periodKey(year: number, month: number): string {
 }
 
 /**
+ * Primer mes que esta funcionalidad puede materializar, como clave de periodo.
+ *
+ * POR QUE UN MES FIJO Y NO `plantilla.createdAt`: las 10 plantillas reales se
+ * crearon todas en 2026-03, pero marzo, abril, mayo, junio y julio de 2026 YA
+ * CONTIENEN el alquiler, los servicios, el seguro y la cochera cargados A MANO
+ * como gastos comunes (marzo 2026 tiene 69 gastos reales y llega a $2.301.704
+ * sin una sola fila materializada). Derivar el piso de `createdAt` haria que un
+ * click en la flecha "←" del dashboard materializara esos cinco meses y
+ * DUPLICARA el alquiler: unos cinco millones de pesos fantasma.
+ *
+ * Este mes es el mes en que la materializacion automatica entro en vigencia:
+ * el primero en el que los recurrentes NO se cargaron a mano. Si alguien lo
+ * "mejora" volviendo a `createdAt`, reintroduce el doble conteo.
+ *
+ * El guard de `createdAt` sigue existiendo y es complementario: cubre las
+ * plantillas creadas DESPUES del piso, que no deben materializar meses
+ * anteriores a su propia existencia.
+ */
+export const PRIMER_PERIODO_MATERIALIZABLE = "2026-08";
+
+/**
+ * Verdadero si el mes pedido esta dentro de la ventana materializable:
+ *
+ * - PISO: `PRIMER_PERIODO_MATERIALIZABLE` (ver arriba).
+ * - TECHO: el mes actual. Un mes que todavia no paso no puede tener gastos, y
+ *   materializarlo congelaria el monto que la plantilla tiene HOY — que es el
+ *   monto equivocado en cuanto el alquiler se indexa.
+ *
+ * Se compara con los strings de `periodKey`, no con numeros: el mes viene con
+ * dos digitos y el año con cuatro, asi que el orden lexicografico es el orden
+ * cronologico. De paso rechaza por construccion cualquier basura que llegue
+ * igual (mes 13 -> "2026-13" queda por encima del techo, mes 0 -> "2026-00"
+ * por debajo del piso, `NaN` -> "NaN-NaN" por encima de todo).
+ *
+ * `hoy` es un parametro para que los tests puedan fijar el techo; en
+ * produccion se usa el reloj. Se lee en hora local, igual que el resto del
+ * repo (`new Date().getMonth() + 1` en los route handlers).
+ */
+export function esPeriodoMaterializable(
+  year: number,
+  month: number,
+  hoy: Date = new Date()
+): boolean {
+  const periodo = periodKey(year, month);
+  if (periodo < PRIMER_PERIODO_MATERIALIZABLE) return false;
+  if (periodo > periodKey(hoy.getFullYear(), hoy.getMonth() + 1)) return false;
+  return true;
+}
+
+/**
  * Verdadero si el error es la violacion de restriccion unica de Prisma
  * (P2002), sin importar el namespace de Prisma para no romper la pureza
  * de este modulo. Mismo patron que `isDuplicateKeyError` en
@@ -48,6 +98,13 @@ function isDuplicateKeyError(error: unknown): boolean {
 /**
  * Crea los `Expense` que faltan para las plantillas mensuales activas en el
  * mes pedido. Devuelve cuantos creo.
+ *
+ * VENTANA TEMPORAL: solo materializa entre `PRIMER_PERIODO_MATERIALIZABLE` y
+ * el mes actual, inclusive (ver `esPeriodoMaterializable`). Fuera de esa
+ * ventana no crea nada y devuelve 0. Esto es lo que impide que navegar con las
+ * flechas del dashboard escriba gastos: "→" a un mes futuro inventaria un
+ * alquiler que nadie pago, "←" a un mes anterior al piso duplicaria el que ya
+ * esta cargado a mano.
  *
  * Por que materializar como `Expense` y no como un modelo aparte: la Rebanada 1
  * borro `RecurringExpensePeriod` porque su unico consumidor era el motor de
@@ -80,6 +137,11 @@ export async function materializeRecurringForMonth(
   year: number,
   month: number
 ): Promise<number> {
+  // Los limites viven ACA, no en los call sites: los dos route handlers pasan
+  // el mes que llega del query string y cualquier llamador futuro hereda la
+  // ventana sin tener que acordarse de nada.
+  if (!esPeriodoMaterializable(year, month)) return 0;
+
   const periodo = periodKey(year, month);
   const finDelMes = new Date(Date.UTC(year, month, 1));
 
