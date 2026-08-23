@@ -226,3 +226,45 @@ test("buildConfirmation sin cambios no agrega ninguna linea de mas", () => {
   const text = buildConfirmation(BASE);
   assert.doesNotMatch(text, /↺/);
 });
+
+// ─── item 2: escapado de HTML ───────────────────────────────────────────────
+
+test("buildConfirmation escapa una descripcion con '<', '>' y '&'", () => {
+  const text = buildConfirmation({ ...BASE, description: "cable USB-C <2m> & otros" });
+  assert.match(text, /cable USB-C &lt;2m&gt; &amp; otros/);
+  assert.doesNotMatch(text, /<2m>/);
+});
+
+test("buildConfirmation escapa una categoria, un pagador y un nombre de tarjeta con HTML", () => {
+  const text = buildConfirmation({
+    ...BASE,
+    categoryName: "Casa & Jardín",
+    payerName: "Vir <3",
+    cardName: "Visa & Mastercard",
+  });
+  assert.match(text, /Casa &amp; Jardín/);
+  assert.match(text, /Vir &lt;3/);
+  assert.match(text, /Visa &amp; Mastercard/);
+});
+
+test("buildConfirmation escapa el unmatchedCardName", () => {
+  const text = buildConfirmation({ ...BASE, cardName: null, unmatchedCardName: "visa <naranja>" });
+  assert.match(text, /visa &lt;naranja&gt;/);
+});
+
+test("buildConfirmation NO escapa las etiquetas de la plantilla (<b>...</b>)", () => {
+  const text = buildConfirmation(BASE);
+  assert.match(text, /<b>/);
+  assert.match(text, /<\/b>/);
+});
+
+test("describeChanges escapa la descripcion y la categoria de antes y de despues", () => {
+  const lines = describeChanges(
+    { ...ANTES, description: "Kiosco <viejo>" },
+    { ...ANTES, description: "Kiosco & Deli", categoryName: "Casa & Jardín" }
+  );
+  const descripcionLinea = lines.find((l) => l.startsWith("descripcion:"));
+  const categoriaLinea = lines.find((l) => l.startsWith("categoria:"));
+  assert.equal(descripcionLinea, "descripcion: Kiosco &lt;viejo&gt; → Kiosco &amp; Deli");
+  assert.equal(categoriaLinea, "categoria: Comida y delivery → Casa &amp; Jardín");
+});

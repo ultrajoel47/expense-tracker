@@ -1,4 +1,4 @@
-import { formatArs } from "../format.ts";
+import { formatArs, escapeHtml } from "../format.ts";
 
 const ANOMALY_FACTOR = 10;
 
@@ -99,7 +99,7 @@ export function describeChanges(
   }
 
   if (antes.description !== despues.description) {
-    lines.push(`descripcion: ${antes.description} → ${despues.description}`);
+    lines.push(`descripcion: ${escapeHtml(antes.description)} → ${escapeHtml(despues.description)}`);
   }
 
   if (antes.date.getTime() !== despues.date.getTime()) {
@@ -118,7 +118,7 @@ export function describeChanges(
   }
 
   if (antes.categoryName !== despues.categoryName) {
-    lines.push(`categoria: ${antes.categoryName} → ${despues.categoryName}`);
+    lines.push(`categoria: ${escapeHtml(antes.categoryName)} → ${escapeHtml(despues.categoryName)}`);
   }
 
   return lines;
@@ -157,9 +157,9 @@ export function buildConfirmation(e: {
   const fecha = formatFechaCorta(e.date);
 
   const lines = [
-    `${e.corregido ? "✏" : "✓"} <b>${formatArs(e.amount)}</b> · ${e.description}`,
-    `${e.categoryName} · ${e.scope} · pago ${e.payerName} · ${fecha}` +
-      (e.cardName ? ` · ${e.cardName}` : ""),
+    `${e.corregido ? "✏" : "✓"} <b>${formatArs(e.amount)}</b> · ${escapeHtml(e.description)}`,
+    `${escapeHtml(e.categoryName)} · ${e.scope} · pago ${escapeHtml(e.payerName)} · ${fecha}` +
+      (e.cardName ? ` · ${escapeHtml(e.cardName)}` : ""),
   ];
 
   if (e.cambios?.length) {
@@ -168,7 +168,7 @@ export function buildConfirmation(e: {
 
   if (e.unmatchedCardName) {
     lines.push(
-      `⚠ No encontre una tarjeta tuya que se parezca a "${e.unmatchedCardName}", ` +
+      `⚠ No encontre una tarjeta tuya que se parezca a "${escapeHtml(e.unmatchedCardName)}", ` +
         "asi que el gasto quedo SIN tarjeta. Asignala en la web."
     );
   }
