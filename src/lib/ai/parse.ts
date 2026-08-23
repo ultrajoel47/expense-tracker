@@ -75,6 +75,11 @@ realidad fueron 15 lucas", "no, era farmacia", "cambiale la fecha a ayer"):
 }
 
 Reglas:
+- Las "Equivalencias ya conocidas" son cosas que la pareja ya corrigio a mano:
+  si la descripcion del gasto coincide con una de esas equivalencias, usa la
+  categoria (y el ambito, si lo trae) que dice la equivalencia, salvo que el
+  mensaje diga explicitamente otra cosa. Una equivalencia vale mas que tu
+  intuicion sobre el nombre del comercio, porque alguien la enseno.
 - Una transferencia, un pago o un "le pague a X" a una persona, un comercio o
   un alias TAMBIEN es un gasto (intent "gasto"), aunque no se compre algo
   explicito. El nombre del destinatario va en "description".

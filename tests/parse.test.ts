@@ -360,3 +360,37 @@ test("no revienta si amount es un objeto", async () => {
   assert.ok(result);
   assert.equal(result.intent, "desconocido");
 });
+
+// ─── aliases en el prompt ────────────────────────────────────────────────
+
+test("un ctx.aliases no vacio aparece en el system prompt que recibe el proveedor", async () => {
+  let systemCapturado = "";
+  const provider = {
+    complete: async (system: string, _user: string) => {
+      systemCapturado = system;
+      return JSON.stringify({
+        intent: "gasto",
+        amount: "12 lucas",
+        description: "Juan Perez",
+        date: "2026-08-22",
+        categoryName: "Comida y delivery",
+        scope: "casa",
+        payerName: null,
+        installments: null,
+        cardName: null,
+      });
+    },
+  };
+
+  const ctxConAliases: ParseContext = {
+    ...CTX,
+    aliases: [
+      { pattern: "juan perez", categoryName: "Comida y delivery", description: "Juan Perez", scope: null },
+    ],
+  };
+
+  await parseMessage("transferi 12 lucas a juan perez", ctxConAliases, provider);
+  assert.ok(systemCapturado.includes("juan perez"));
+  assert.ok(systemCapturado.includes("Comida y delivery"));
+  assert.ok(systemCapturado.includes("Equivalencias ya conocidas"));
+});
