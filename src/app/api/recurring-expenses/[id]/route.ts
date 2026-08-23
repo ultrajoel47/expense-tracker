@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleRecurringExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds } from "@/lib/household";
+import { FRECUENCIAS_MATERIALIZABLES } from "@/lib/recurring-materialize";
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -17,6 +18,19 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!rec) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
   const body = await req.json();
+
+  // Igual que en el POST: solo se aceptan las frecuencias que el materializador
+  // procesa. `frequency` es opcional en el PUT, asi que solo se valida cuando
+  // viene en el body.
+  if (
+    body.frequency !== undefined &&
+    !(FRECUENCIAS_MATERIALIZABLES as readonly string[]).includes(body.frequency)
+  ) {
+    return NextResponse.json(
+      { error: `frequency debe ser una de: ${FRECUENCIAS_MATERIALIZABLES.join(", ")}` },
+      { status: 400 }
+    );
+  }
 
   const updated = await prisma.recurringExpense.update({
     where: { id },

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere, visibleRecurringExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds } from "@/lib/household";
 import { expensesToCharges } from "@/lib/expenses/charges";
-import { materializeRecurringForMonth } from "@/lib/recurring-materialize";
+import { materializeRecurringForMonthSafely } from "@/lib/recurring-materialize";
 import { parsePeriodParams } from "@/lib/period-params";
 
 export async function GET(req: Request) {
@@ -34,11 +34,16 @@ export async function GET(req: Request) {
   // fallo transitorio con "ya existe" haria que el alquiler dejara de aparecer
   // en silencio — pero a nivel de la ruta la balanza se invierte: se sirve la
   // lectura con lo que ya este materializado y el proximo request lo cura.
-  try {
-    await materializeRecurringForMonth(prisma as never, year, month);
-  } catch (error) {
-    console.error("[stats] fallo la materializacion de recurrentes, se sirve la lectura igual", error);
-  }
+  //
+  // `recurringMaterializationFailed` en la respuesta es lo que evita que ese
+  // "se sirve igual" sea un silencio total: si fallo, el dashboard lo tiene
+  // que poder mostrar en vez de que la unica traza quede en el log del server.
+  const { fallo: recurringMaterializationFailed } = await materializeRecurringForMonthSafely(
+    prisma as never,
+    year,
+    month,
+    (error) => console.error("[stats] fallo la materializacion de recurrentes, se sirve la lectura igual", error)
+  );
 
   const startDate = new Date(Date.UTC(year, month - 1, 1));
   const endDate = new Date(Date.UTC(year, month, 1));
@@ -206,5 +211,6 @@ export async function GET(req: Request) {
       nextDue: r.nextDue.toISOString(),
       category: r.category,
     })),
+    recurringMaterializationFailed,
   });
 }

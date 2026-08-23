@@ -5,6 +5,10 @@ export type Intake = {
   photoFileId: string | null;
   replyToMessageId: string | null;
   callbackData: string | null;
+  /** id del callback_query, para contestarlo con answerCallbackQuery. */
+  callbackQueryId: string | null;
+  /** message_id del mensaje que tiene los botones, para reescribirlo. */
+  callbackMessageId: string | null;
 };
 
 type Photo = { file_id?: unknown; file_size?: unknown };
@@ -38,5 +42,11 @@ export function toIntake(update: unknown): Intake | null {
         : null,
     callbackData:
       typeof u.callback_query?.data === "string" ? u.callback_query.data : null,
+    callbackQueryId:
+      typeof u.callback_query?.id === "string" ? u.callback_query.id : null,
+    callbackMessageId:
+      u.callback_query?.message?.message_id !== undefined
+        ? String(u.callback_query.message.message_id)
+        : null,
   };
 }

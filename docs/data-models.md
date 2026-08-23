@@ -62,6 +62,25 @@ El modelo central. Un gasto puntual.
 materialización — este último tiene además una versión **única y parcial** creada
 a mano, ver [Pasos manuales en Mongo](#pasos-manuales-en-mongo).
 
+### `PRIMER_PERIODO_MATERIALIZABLE`
+
+Constante en `src/lib/recurring-materialize.ts`, valor `"2026-08"`. Es el
+**piso** de la ventana de meses que la materialización automática puede crear;
+el **techo** es el mes actual (en hora de Buenos Aires, no la del proceso —
+ver `todayInBuenosAires` en `src/lib/ai/normalize.ts`). Fuera de esa ventana,
+`materializeRecurringForMonth` no crea nada y devuelve `0`.
+
+Es un mes fijo, no derivado de `RecurringExpense.createdAt`, y eso es
+deliberado: las 10 plantillas reales se crearon en 2026-03, pero marzo a julio
+de 2026 **ya contienen** el alquiler, los servicios, el seguro y la cochera
+cargados a mano como `Expense` comunes. Derivar el piso de `createdAt`
+materializaría esos cinco meses también y duplicaría el alquiler. `2026-08` es
+el primer mes en el que los recurrentes dejaron de cargarse a mano.
+
+El guard de `createdAt` (una plantilla no puede materializar un mes anterior a
+su propia creación) sigue existiendo aparte y es complementario: cubre
+plantillas creadas DESPUES del piso.
+
 ## Installment
 
 Cuota de un gasto en cuotas. `[expenseId, installmentNumber]` es único.
@@ -90,11 +109,24 @@ plantilla en sí no entra en ningún total.
 
 Aprendizaje de categorización. Un `pattern` normalizado (minúsculas, sin
 acentos) que mapea a una categoría, y opcionalmente a una descripción linda y a
-un `scope`.
+un `scope`. Lo escribe y lo lee `src/lib/aliases.ts`.
 
 - `scope` acá es **nullable**: un alias puede no forzar el ámbito.
 - `hits` cuenta los usos, para poder ordenar y para inyectar los más frecuentes
   en el prompt de la IA.
+- **`pattern` es la clave natural del `upsert` con el que se aprende un
+  alias.** No hay un id de negocio separado: la fila SE IDENTIFICA por su
+  patrón, así que la corrección siguiente sobre el mismo patrón actualiza la
+  misma fila (pisa `categoryId` y, si tocó el ámbito, `scope`) en vez de crear
+  una segunda. Es lo que hace que un alias aprendido de una corrección
+  equivocada no quede mal para siempre: la próxima corrección sobre esa misma
+  descripción lo reemplaza.
+- **`hits` es una heurística ordenadora, no un dato del dominio.** Nadie puede
+  saber si la IA usó de verdad un alias para clasificar un gasto —el prompt lo
+  ofrece como contexto, pero la decisión es de la IA—, así que `hits` cuenta
+  una señal indirecta (el gasto quedó con la descripción de un alias Y con la
+  categoría que ese alias predice). Sirve para decidir qué aliases sobreviven
+  al tope que se inyecta en el prompt, no para ningún cálculo del negocio.
 
 ## ProcessedUpdate
 

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleRecurringExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds, isHouseholdMember } from "@/lib/household";
+import { FRECUENCIAS_MATERIALIZABLES } from "@/lib/recurring-materialize";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -44,6 +45,18 @@ export async function POST(req: Request) {
   if (!amount || !description || !categoryId || !frequency || !nextDue) {
     return NextResponse.json(
       { error: "Campos requeridos: amount, description, categoryId, frequency, nextDue" },
+      { status: 400 }
+    );
+  }
+
+  // El materializador solo procesa FRECUENCIAS_MATERIALIZABLES ("MONTHLY" hoy).
+  // Sin este chequeo una plantilla WEEKLY se crea, se lista y aparece en
+  // "proximos recurrentes", pero no entra en ningun total: nunca se materializa.
+  if (!(FRECUENCIAS_MATERIALIZABLES as readonly string[]).includes(frequency)) {
+    return NextResponse.json(
+      {
+        error: `frequency debe ser una de: ${FRECUENCIAS_MATERIALIZABLES.join(", ")}`,
+      },
       { status: 400 }
     );
   }

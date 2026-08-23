@@ -14,6 +14,8 @@ test("normaliza un mensaje de texto", () => {
     photoFileId: null,
     replyToMessageId: null,
     callbackData: null,
+    callbackQueryId: null,
+    callbackMessageId: null,
   });
 });
 
@@ -55,6 +57,28 @@ test("normaliza un callback de boton", () => {
   });
   assert.equal(intake?.callbackData, "scope:abc123");
   assert.equal(intake?.chatId, "4242");
+});
+
+test("un callback trae el id del callback_query y el message_id de los botones", () => {
+  const intake = toIntake({
+    update_id: 105,
+    callback_query: {
+      id: "cbq-1",
+      data: "sc:507f1f77bcf86cd799439011:personal",
+      message: { message_id: 5, chat: { id: 4242 } },
+    },
+  });
+  assert.equal(intake?.callbackQueryId, "cbq-1");
+  assert.equal(intake?.callbackMessageId, "5");
+});
+
+test("un mensaje de texto no trae datos de callback", () => {
+  const intake = toIntake({
+    update_id: 106,
+    message: { message_id: 8, chat: { id: 4242 }, text: "hola" },
+  });
+  assert.equal(intake?.callbackQueryId, null);
+  assert.equal(intake?.callbackMessageId, null);
 });
 
 test("devuelve null para un update sin chat", () => {

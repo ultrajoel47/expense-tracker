@@ -101,6 +101,16 @@ hablen de eso, es residuo: reportalo.
 6. **La ingesta principal es el bot de Telegram. La web es lectura y
    corrección.** Los formularios de alta se mantienen como escape hatch (cargar
    algo viejo, o si el bot está caído), pero no son el camino principal.
+7. **Un alias (`src/lib/aliases.ts`) solo enseña la categoría, y solo se
+   aprende de un gasto de casa.** Los aliases se inyectan en el prompt de los
+   DOS miembros del hogar y ese prompt se manda a un proveedor de IA externo
+   en cada mensaje: aprender de un gasto `personal` llevaría su descripción
+   (un tratamiento médico, un regalo sorpresa) al contexto de la otra persona
+   y de un tercero, indefinidamente — no es una lectura de `Expense`, así que
+   ningún guard de visibilidad lo detecta. Por el mismo motivo un alias ya no
+   enseña el ámbito: `Alias` no tiene `userId`, así que una corrección de UNA
+   persona marcando algo como "personal" arrastraba a la OTRA a cargar lo
+   mismo como personal, invisible para quien no lo pagó.
 
 ## Docs de referencia
 
@@ -126,6 +136,10 @@ hablen de eso, es residuo: reportalo.
 | Listado de gastos | `src/app/(dashboard)/dashboard/expenses/page.tsx` |
 | Dashboard y gráficos | `src/app/(dashboard)/dashboard/page.tsx` |
 | Semilla de categorías | `scripts/seed-categories.ts` |
+| Aliases del bot (aprender/inyectar equivalencias en el prompt) | `src/lib/aliases.ts` |
+| Agregación de las consultas del bot ("cuánto gastamos...") | `src/lib/queries/aggregate.ts` |
+| Corrección y borrado de un gasto (bot y web) | `src/lib/expenses/correct.ts` |
+| Botones de la confirmación del bot y su `callback_data` | `src/lib/telegram/callbacks.ts` |
 
 Los módulos del bot (`src/lib/telegram/`), de la IA (`src/lib/ai/`) y del OCR
 (`src/lib/ocr/`), más `src/app/api/telegram/`, están descritos en

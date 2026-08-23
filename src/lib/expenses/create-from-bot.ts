@@ -1,3 +1,5 @@
+import { formatArs, escapeHtml } from "../format.ts";
+
 const ANOMALY_FACTOR = 10;
 
 /**
@@ -19,14 +21,6 @@ const ANOMALY_FACTOR = 10;
  * de lo que esta pareja gasta en un solo item.
  */
 const ABSOLUTE_CEILING = 2_000_000;
-
-export function formatArs(amount: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 /**
  * Normaliza un nombre de tarjeta para comparar: minusculas, sin acentos, sin
@@ -72,6 +66,64 @@ export function resolveCard<T extends { id: string; name: string }>(
   );
 }
 
+/** El mismo formato `dd/MM` (zona horaria de Buenos Aires) que usa
+ * `buildConfirmation`, extraido para que `describeChanges` no duplique el
+ * `Intl.DateTimeFormat`. */
+function formatFechaCorta(date: Date): string {
+  return new Intl.DateTimeFormat("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
+}
+
+/**
+ * Los campos que cambiaron, como "antes → despues", para la confirmacion de una
+ * correccion.
+ *
+ * Existe porque una correccion es la unica operacion DESTRUCTIVA que el bot
+ * hace sin pedir confirmacion: pisa un valor y el anterior no queda en ningun
+ * lado (no hay historial ni auditoria), y el teclado solo puede revertir ambito
+ * y categoria. Mostrar el valor viejo no previene el error, pero lo deja
+ * escrito en el chat: con eso, una correccion aplicada al gasto equivocado se
+ * ve y se puede desarmar a mano.
+ */
+export function describeChanges(
+  antes: { amount: number; description: string; date: Date; scope: string; categoryName: string },
+  despues: { amount: number; description: string; date: Date; scope: string; categoryName: string }
+): string[] {
+  const lines: string[] = [];
+
+  if (antes.amount !== despues.amount) {
+    lines.push(`monto: ${formatArs(antes.amount)} → ${formatArs(despues.amount)}`);
+  }
+
+  if (antes.description !== despues.description) {
+    lines.push(`descripcion: ${escapeHtml(antes.description)} → ${escapeHtml(despues.description)}`);
+  }
+
+  if (antes.date.getTime() !== despues.date.getTime()) {
+    const fechaAntes = formatFechaCorta(antes.date);
+    const fechaDespues = formatFechaCorta(despues.date);
+    // Mismo dia, distinta hora: la confirmacion habla de dias (dd/MM), asi
+    // que mostrar un "cambio" que no se ve en el texto confundiria mas de lo
+    // que aclara.
+    if (fechaAntes !== fechaDespues) {
+      lines.push(`fecha: ${fechaAntes} → ${fechaDespues}`);
+    }
+  }
+
+  if (antes.scope !== despues.scope) {
+    lines.push(`ambito: ${antes.scope} → ${despues.scope}`);
+  }
+
+  if (antes.categoryName !== despues.categoryName) {
+    lines.push(`categoria: ${escapeHtml(antes.categoryName)} → ${escapeHtml(despues.categoryName)}`);
+  }
+
+  return lines;
+}
+
 export function buildConfirmation(e: {
   amount: number;
   description: string;
@@ -89,22 +141,34 @@ export function buildConfirmation(e: {
    * nadie se entere.
    */
   unmatchedCardName?: string | null;
+  /**
+   * True cuando el mensaje confirma una CORRECCION y no un alta. Cambia el
+   * glifo de la primera linea: un "✓" en una correccion se lee como un gasto
+   * nuevo, y en una app de gastos "aparecio otro gasto" y "cambio el que ya
+   * estaba" no pueden verse igual.
+   */
+  corregido?: boolean;
+  /**
+   * Los cambios de una correccion, como "antes → despues". Se renderizan
+   * debajo de las dos lineas del gasto. Ver `describeChanges`.
+   */
+  cambios?: string[];
 }): string {
-  const fecha = new Intl.DateTimeFormat("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    day: "2-digit",
-    month: "2-digit",
-  }).format(e.date);
+  const fecha = formatFechaCorta(e.date);
 
   const lines = [
-    `✓ <b>${formatArs(e.amount)}</b> · ${e.description}`,
-    `${e.categoryName} · ${e.scope} · pago ${e.payerName} · ${fecha}` +
-      (e.cardName ? ` · ${e.cardName}` : ""),
+    `${e.corregido ? "✏" : "✓"} <b>${formatArs(e.amount)}</b> · ${escapeHtml(e.description)}`,
+    `${escapeHtml(e.categoryName)} · ${e.scope} · pago ${escapeHtml(e.payerName)} · ${fecha}` +
+      (e.cardName ? ` · ${escapeHtml(e.cardName)}` : ""),
   ];
+
+  if (e.cambios?.length) {
+    for (const cambio of e.cambios) lines.push(`↺ ${cambio}`);
+  }
 
   if (e.unmatchedCardName) {
     lines.push(
-      `⚠ No encontre una tarjeta tuya que se parezca a "${e.unmatchedCardName}", ` +
+      `⚠ No encontre una tarjeta tuya que se parezca a "${escapeHtml(e.unmatchedCardName)}", ` +
         "asi que el gasto quedo SIN tarjeta. Asignala en la web."
     );
   }

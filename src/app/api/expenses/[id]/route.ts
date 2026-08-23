@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds } from "@/lib/household";
+import { rebuildInstallments, requiereRebuildDeCuotas } from "@/lib/expenses/correct";
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -51,6 +52,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     },
     include: { category: true },
   });
+
+  // Ver el comentario de cabecera de `rebuildInstallments`: sin esto, corregir
+  // el monto de una compra en cuotas no cambia ningun total del dashboard,
+  // porque los totales cuentan la cuota que vence, no el total del gasto.
+  //
+  // El criterio de "hay que reconstruir" vive en `requiereRebuildDeCuotas`
+  // (unico, compartido con `applyCorrection` del bot): antes estaba escrito
+  // dos veces, con criterios distintos, y la version del bot recalculaba de
+  // mas comparando la fecha por `getTime()` en vez de por año/mes.
+  if (
+    expense.totalInstallments &&
+    requiereRebuildDeCuotas(expense, { amount: updated.amount, date: updated.date })
+  ) {
+    await rebuildInstallments(prisma, id, updated.date, updated.amount, expense.totalInstallments);
+  }
 
   return NextResponse.json(updated);
 }

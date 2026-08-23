@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   materializeRecurringForMonth,
+  materializeRecurringForMonthSafely,
   periodKey,
   esPeriodoMaterializable,
   PRIMER_PERIODO_MATERIALIZABLE,
+  FRECUENCIAS_MATERIALIZABLES,
 } from "../src/lib/recurring-materialize.ts";
 
 function clienteFalso(plantillas: any[], yaExistentes: string[] = []) {
@@ -224,4 +226,110 @@ test("periodoMaterializable expone los limites para los tests y los llamadores",
   assert.equal(esPeriodoMaterializable(2026, 8, new Date(2026, 7, 23)), true);
   assert.equal(esPeriodoMaterializable(2026, 9, new Date(2026, 7, 23)), false);
   assert.equal(esPeriodoMaterializable(2026, 8, new Date(2027, 0, 5)), true);
+});
+
+// ─── Mes 13 en un techo futuro: el bug que la comparacion de strings no ve ──
+
+test("mes 13 no materializa aunque el techo ya este en 2027 (la clave '2026-13' no puede colarse por delante de '2027-01')", () => {
+  // Esta es la razon REAL por la que el test de "un mes fuera de 1-12" de mas
+  // arriba tiene que pasar siempre y no solo hoy: fijando `hoy` en 2027, sin
+  // el guard de rango "2026-13" es >= "2026-08" (piso) y < "2027-01" (techo con
+  // hoy en 2027), asi que colaba. Con el guard, se rechaza por rango antes de
+  // construir la clave, sin importar que diga el reloj.
+  const { client, creados } = clienteFalso([ALQUILER]);
+  const hoyEn2027 = new Date(2027, 0, 5);
+  assert.equal(esPeriodoMaterializable(2026, 13, hoyEn2027), false);
+  return materializeRecurringForMonth(client as any, 2026, 13).then(() => {
+    assert.equal(creados.length, 0);
+  });
+});
+
+test("mes 99 no materializa (year=2026&month=99 no puede dar una clave admitida)", () => {
+  assert.equal(esPeriodoMaterializable(2026, 99, new Date(2034, 8, 5)), false);
+});
+
+// ─── El techo se calcula en hora de Buenos Aires, no en la del proceso ──────
+
+test("31/08 23:00 UTC (20:00 en Buenos Aires, todavia agosto) no admite septiembre", () => {
+  // Con `new Date().getMonth()` en un proceso que corre en UTC (Vercel), este
+  // instante ya séria septiembre y el techo admitiria de mas.
+  const hoy = new Date("2026-08-31T23:00:00Z");
+  assert.equal(esPeriodoMaterializable(2026, 9, hoy), false);
+  assert.equal(esPeriodoMaterializable(2026, 8, hoy), true);
+});
+
+test("01/09 02:00 UTC (23:00 del 31/08 en Buenos Aires, todavia agosto alla) tampoco admite septiembre: este es el caso que fallaba antes del fix", () => {
+  const hoy = new Date("2026-09-01T02:00:00Z");
+  assert.equal(esPeriodoMaterializable(2026, 9, hoy), false);
+  assert.equal(esPeriodoMaterializable(2026, 8, hoy), true);
+});
+
+// ─── FRECUENCIAS_MATERIALIZABLES: fuente unica con el `where` del motor ─────
+
+test("FRECUENCIAS_MATERIALIZABLES es hoy solo MONTHLY", () => {
+  assert.deepEqual([...FRECUENCIAS_MATERIALIZABLES], ["MONTHLY"]);
+});
+
+test("materializeRecurringForMonth filtra por FRECUENCIAS_MATERIALIZABLES, no por un literal aparte", async () => {
+  let whereRecibido: any = null;
+  const client = {
+    recurringExpense: {
+      findMany: async (args: any) => {
+        whereRecibido = args.where;
+        return [];
+      },
+    },
+    $transaction: async (fn: any) => fn({ expense: { findFirst: async () => null, create: async () => ({}) } }),
+  };
+
+  await materializeRecurringForMonth(client as any, 2026, 8);
+
+  assert.deepEqual(whereRecibido.frequency, { in: [...FRECUENCIAS_MATERIALIZABLES] });
+});
+
+// ─── materializeRecurringForMonthSafely: el try/catch de los call sites, ────
+// ─── ahora testeable en vez de verificado solo por inspeccion ──────────────
+
+test("materializeRecurringForMonthSafely: si materializa bien, devuelve fallo:false y no llama a onError", async () => {
+  const { client } = clienteFalso([ALQUILER]);
+  let onErrorLlamado = false;
+
+  const resultado = await materializeRecurringForMonthSafely(
+    client as any,
+    2026,
+    8,
+    () => { onErrorLlamado = true; }
+  );
+
+  assert.deepEqual(resultado, { creados: 1, fallo: false });
+  assert.equal(onErrorLlamado, false);
+});
+
+test("materializeRecurringForMonthSafely: si materializeRecurringForMonth tira, absorbe el error, avisa por onError y devuelve fallo:true", async () => {
+  const client = {
+    recurringExpense: { findMany: async () => [ALQUILER] },
+    $transaction: async () => {
+      throw new Error("conexion caida");
+    },
+  };
+  const errores: unknown[] = [];
+
+  const resultado = await materializeRecurringForMonthSafely(
+    client as any,
+    2026,
+    8,
+    (error) => errores.push(error)
+  );
+
+  assert.deepEqual(resultado, { creados: 0, fallo: true });
+  assert.equal(errores.length, 1);
+  assert.match((errores[0] as Error).message, /conexion caida/);
+});
+
+test("materializeRecurringForMonthSafely: un mes fuera de la ventana sigue devolviendo fallo:false (no es un error, es la ventana funcionando)", async () => {
+  const { client } = clienteFalso([ALQUILER]);
+  const resultado = await materializeRecurringForMonthSafely(client as any, 2026, 3, () => {
+    assert.fail("no deberia llamarse onError: no materializar antes del piso no es un fallo");
+  });
+  assert.deepEqual(resultado, { creados: 0, fallo: false });
 });

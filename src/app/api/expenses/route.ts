@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere } from "@/lib/visibility";
 import { getHouseholdUserIds, isHouseholdMember } from "@/lib/household";
 import { buildInstallments } from "@/lib/expenses/installments";
-import { materializeRecurringForMonth } from "@/lib/recurring-materialize";
+import { materializeRecurringForMonthSafely } from "@/lib/recurring-materialize";
 import { parsePeriodParams } from "@/lib/period-params";
 
 export async function GET(req: Request) {
@@ -36,11 +36,16 @@ export async function GET(req: Request) {
   // fallo transitorio con "ya existe" haria que el alquiler dejara de aparecer
   // en silencio — pero a nivel de la ruta la balanza se invierte: se sirve la
   // lectura con lo que ya este materializado y el proximo request lo cura.
-  try {
-    await materializeRecurringForMonth(prisma as never, periodo.year, periodo.month);
-  } catch (error) {
-    console.error("[expenses] fallo la materializacion de recurrentes, se sirve la lectura igual", error);
-  }
+  //
+  // Este listado no expone el flag de fallo en su respuesta (no alimenta el
+  // aviso del dashboard, que consume /api/expenses/stats), pero usa el mismo
+  // envoltorio que esa ruta para no repetir el try/catch a mano dos veces.
+  await materializeRecurringForMonthSafely(
+    prisma as never,
+    periodo.year,
+    periodo.month,
+    (error) => console.error("[expenses] fallo la materializacion de recurrentes, se sirve la lectura igual", error)
+  );
 
   const categoryId = url.searchParams.get("categoryId");
   const description = url.searchParams.get("description");

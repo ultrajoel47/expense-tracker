@@ -67,23 +67,106 @@ const BARE_USER_ID_ALLOWLIST: Record<string, string> = {};
 
 /**
  * Archivos que leen Expense o RecurringExpense SIN pasar por la regla de
- * visibilidad, deliberadamente. Solo agregados (no devuelven filas) y solo
- * cuando el agregado tiene que ser del hogar entero.
+ * visibilidad, deliberadamente — YA NO "solo agregados": desde el arreglo de
+ * I3, dos de las entradas de abajo son `findFirst` que devuelven filas
+ * completas (la de mayor riesgo del sistema, en `handleCallback`, incluida).
+ * Lo que las hace seguras no es el shape de la lectura sino que la exencion es
+ * POR LLAMADA (`llamadas` abajo) y cada motivo explica por que esa llamada
+ * puntual no necesita, o no puede, pasar por `visibleExpensesWhere`.
+ *
+ * `motivo` es prosa; `llamadas` son fragmentos de texto (substrings del
+ * cuerpo del argumento de la llamada, capturado por `LECTURA_RE`) que
+ * identifican CADA lectura exenta de ese archivo. El test de abajo
+ * ("las exenciones de NO_VISIBILITY_ALLOWLIST son por llamada, no por
+ * archivo") verifica las dos direcciones: toda lectura que `LECTURA_RE`
+ * encuentre en el archivo tiene que matchear alguno de sus fragmentos (o usar
+ * la regla de visibilidad), y todo fragmento declarado tiene que matchear
+ * alguna lectura real — si no, es una entrada obsoleta.
  */
-const NO_VISIBILITY_ALLOWLIST: Record<string, string> = {
-  // `prisma.expense.count({ where: { categoryId } })` para el guard del DELETE:
-  // no se puede borrar una categoria con gastos apuntando a ella, INCLUIDOS los
-  // que quien borra no puede ver. Acotarlo por visibilidad seria el bug.
-  "app/api/categories/[id]/route.ts": "count para el guard del DELETE: tiene que ver todos los gastos",
-  // `prisma.expense.aggregate` con el promedio de la categoria, para la señal
-  // de monto anomalo. Es el promedio del hogar, no el de quien escribe.
-  "app/api/telegram/webhook/route.ts": "promedio de la categoria para la señal de anomalia",
+const NO_VISIBILITY_ALLOWLIST: Record<string, { motivo: string; llamadas: string[] }> = {
+  "app/api/categories/[id]/route.ts": {
+    motivo:
+      "`count` para el guard del DELETE: no se puede borrar una categoria con " +
+      "gastos apuntando a ella, INCLUIDOS los que quien borra no puede ver. " +
+      "Acotarlo por visibilidad seria el bug.",
+    llamadas: ["where: { categoryId: id }"],
+  },
+  "app/api/telegram/webhook/route.ts": {
+    motivo:
+      "Cuatro llamadas exentas. (1 y 2) Los dos `aggregate` del promedio de " +
+      "la categoria para la señal de monto anomalo (uno en `registerExpense`, " +
+      "otro en `buildCorrectedConfirmation`): el promedio es del hogar, no el " +
+      "de quien escribe. Identificadas por su propio `where` (`categoryId: " +
+      "category.id` y `categoryId: corrected.categoryId, id: { not: expenseId " +
+      "}` — este ultimo excluye el propio gasto para que una correccion no se " +
+      "diluya a si misma en su propio promedio) en vez del generico `_avg: { " +
+      "amount: true }` — ese fragmento por si solo eximiria a un tercer " +
+      "`aggregate` cualquiera con esa forma, sin que nadie lo decida. (3) El " +
+      "`findFirst` de `handleCallback`: la puerta de la " +
+      "edicion por bot es `canEditViaBot`, y es MAS ESTRICTA que la " +
+      "visibilidad — exige haber pagado o cargado el gasto, no solo poder " +
+      "verlo. Filtrar tambien por visibilidad ahi cancela la Regla de Dominio " +
+      "5 en el caso que la motiva (ver C1 del review del Bloque 2). (4) El " +
+      "`findFirst` con `select: { creditCard }` de `buildCorrectedConfirmation`: " +
+      "lee solo el nombre de la tarjeta de un gasto que el actor ya esta " +
+      "autorizado a editar (paso por `canEditViaBot` en `handleCallback` antes " +
+      "de llegar aca).",
+    llamadas: [
+      "where: { categoryId: category.id }",
+      "where: { categoryId: corrected.categoryId, id: { not: expenseId } }",
+      "where: { id: action.expenseId }",
+      "select: { creditCard: { select: { name: true } } }",
+    ],
+  },
+  "lib/expenses/correct.ts": {
+    motivo:
+      "Las dos lecturas de `resolveCorrectionTarget` son correctas por " +
+      "CONSTRUCCION, no por chequeo. La de reply esta acotada por " +
+      "`botChatId + botMessageId` del propio chat del actor (el reply solo " +
+      "puede apuntar a un mensaje que el bot le mando a ESE chat); la del " +
+      "respaldo esta acotada por `createdById: actorId`. En los dos casos " +
+      "`canEditViaBot` pasa necesariamente (exige haber pagado O cargado, y " +
+      "createdById === actorId ya alcanza). Si alguien ensancha uno de esos " +
+      "dos `where` — por ejemplo para buscar por otro chat o por otro actor — " +
+      "la garantia se cae y hay que revisar el permiso de nuevo.",
+    llamadas: [
+      "botChatId: chatId, botMessageId: replyToMessageId",
+      "createdById: actorId, source: { not: \"recurring\" }",
+    ],
+  },
+  "lib/recurring-materialize.ts": {
+    motivo:
+      "Dos llamadas exentas, mismo motivo para las dos: no hay actor cuya " +
+      "visibilidad aplicar. (1) `client.recurringExpense.findMany({ where: " +
+      "{ active, frequency } })` trae TODAS las plantillas activas del hogar " +
+      "para materializarlas, sin importar quien disparo el GET que dispara " +
+      "la materializacion: es un job que corre para las dos personas a la " +
+      "vez. Filtrar por visibilidad del actor dejaria sin materializar " +
+      "(silenciosamente) las plantillas de la otra persona. (2) " +
+      "`tx.expense.findFirst({ where: { recurringExpenseId, recurringPeriod " +
+      "} })`, dentro de la transaccion: es el chequeo de idempotencia de la " +
+      "materializacion (busca si el periodo ya se materializo), sin actor " +
+      "tampoco — mismo motivo que (1).",
+    llamadas: [
+      "active: true, frequency: { in: [...FRECUENCIAS_MATERIALIZABLES] }",
+      "recurringExpenseId: t.id, recurringPeriod: periodo",
+    ],
+  },
 };
 
 /** Lecturas que devuelven filas o agregados de Expense / RecurringExpense
  * (matcheo por ARCHIVO, usado por la regla de visibilidad y por el guard de
- * obsolescencia de NO_VISIBILITY_ALLOWLIST). */
-const READ_CALL = /prisma\.(expense|recurringExpense)\.(findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow|count|aggregate|groupBy)/;
+ * obsolescencia de NO_VISIBILITY_ALLOWLIST). Prefijo `(?:prisma|client|tx)\.`:
+ * los modulos puros (`src/lib/expenses/correct.ts`,
+ * `src/lib/recurring-materialize.ts`) reciben el cliente de Prisma por
+ * parametro y lo llaman `client`, no `prisma` — anclar solo en `prisma` deja
+ * afuera justo a los modulos que se testean sin base, que es el caso que mas
+ * le importa a este archivo (ver I3 del review del Bloque 2). `tx` se sumo
+ * despues (re-review de 3B): es el alias del cliente DENTRO de una
+ * transaccion (`client.$transaction(async (tx) => ...)`, ver
+ * `recurring-materialize.ts`), y sin este alias el escaner no veia
+ * `tx.expense.findFirst`, el chequeo de idempotencia de la materializacion. */
+const READ_CALL = /(?:prisma|client|tx)\.(expense|recurringExpense)\.(findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow|count|aggregate|groupBy)/;
 
 // ─── Matcheo por LLAMADA (tightening de esta tarea) ─────────────────────────
 
@@ -99,9 +182,21 @@ const LECTURAS = String.raw`(?:findMany|findFirst|findUnique|findFirstOrThrow|fi
  * heuristico de texto, no un parser: alcanza porque el patron que buscamos esta
  * escrito de forma uniforme en todo el repo, y el test de obsolescencia que el
  * archivo ya tiene avisa si eso deja de ser cierto.
+ *
+ * Prefijo `(?:prisma|client|tx)\.`, no solo `prisma\.`: los modulos puros
+ * reciben el cliente de Prisma por PARAMETRO (para poder testearse sin base)
+ * y lo llaman `client`, nunca `prisma` — anclar solo en el literal `prisma`
+ * deja esos modulos completamente invisibles para este escaner, que es como
+ * `lib/expenses/correct.ts` quedo afuera hasta el review del Bloque 2 pese a
+ * tener dos lecturas de Expense sin visibilidad. `tx` es el mismo caso un
+ * nivel mas adentro: el cliente que recibe el callback de
+ * `client.$transaction(async (tx) => ...)` (ver `recurring-materialize.ts`).
+ * Sin este alias, `tx.expense.findFirst` — el chequeo de idempotencia de la
+ * materializacion — quedaba invisible para las dos pruebas de abajo que usan
+ * `LECTURA_RE`.
  */
 const LECTURA_RE = new RegExp(
-  String.raw`prisma\.` + MODELOS + String.raw`\.` + LECTURAS + String.raw`\s*\(([\s\S]*?)\)\s*;`,
+  String.raw`(?:prisma|client|tx)\.` + MODELOS + String.raw`\.` + LECTURAS + String.raw`\s*\(([\s\S]*?)\)\s*;`,
   "g"
 );
 
@@ -137,6 +232,30 @@ const PROHIBIDO_RE = /userId:\s*session\.id/;
  *    en el regex: requeriria rastrear identificadores de variable
  *    (indireccion), que es el otro tipo de complejidad que este heuristico
  *    decide no asumir.
+ *
+ * 3. LECTURA SIN NINGUN `where`: `LECTURA_RE` solo mira DENTRO del argumento
+ *    de una llamada que ya matcheo; no exige que ese argumento tenga un
+ *    `where` en absoluto. Un `prisma.expense.findMany({ orderBy, take })` sin
+ *    `where` pasa las DOS pruebas de arriba (no hay `userId: session.id` que
+ *    prohibir, y "toda lectura pasa por la regla de visibilidad" solo revisa
+ *    que el ARCHIVO mencione `visibleExpensesWhere` en algun lado, no que esa
+ *    llamada puntual la use). Un archivo que ya usa la regla en otras
+ *    llamadas queda con la guardia baja: un `findMany` nuevo sin `where`
+ *    devuelve TODOS los gastos de TODOS los usuarios, de las dos casas y de
+ *    los dos scopes. Es mas facil de escribir por accidente que un filtro a
+ *    mano (alcanza con olvidarse el `where`), asi que el gap es mas ancho de
+ *    lo que sugiere el nombre "PROHIBIDO_RE": no hay nada prohibido, hay algo
+ *    ausente, y este heuristico solo sabe buscar texto presente.
+ *
+ * 4. OTRO NOMBRE PARA LA SESION: `PROHIBIDO_RE` matchea el string literal
+ *    `userId: session.id`. Cualquier alias rompe el match: `const s = await
+ *    getSession()` seguido de `{ userId: s.id }`, o una desestructuracion
+ *    (`const { id } = await getSession()` seguido de `{ userId: id }`), pasan
+ *    de largo aunque sean exactamente el mismo bug que el test existe para
+ *    atrapar. No se resuelve en el regex sin rastrear de donde sale cada
+ *    identificador — el mismo tipo de indireccion que la limitacion 2 ya
+ *    nombra, aca aplicado al nombre de la variable en vez de al limite de la
+ *    llamada.
  */
 
 /** Cuerpos de argumento de cada llamada de lectura de Expense/RecurringExpense
@@ -210,6 +329,47 @@ test("toda lectura de Expense/RecurringExpense pasa por la regla de visibilidad"
   );
 });
 
+test("las exenciones de NO_VISIBILITY_ALLOWLIST son por llamada, no por archivo", () => {
+  // Este es el test que I3 vino a agregar. Antes, un archivo en el allowlist
+  // quedaba exento POR COMPLETO: una lectura nueva ahi adentro, con el where
+  // que fuera, no rompia nada. Aca cada lectura que `LECTURA_RE` capture en un
+  // archivo del allowlist tiene que dar cuenta de si misma: o usa la regla de
+  // visibilidad, o matchea alguno de los fragmentos declarados en `llamadas`
+  // (que documentan, con motivo, por que esa lectura puntual es segura sin
+  // visibilidad). Una lectura NUEVA en `handleCallback` o en cualquier otro
+  // lado de un archivo exento no matchea ningun fragmento existente y este
+  // test se pone rojo hasta que alguien la declare a mano.
+  //
+  // Y en la otra direccion: un fragmento declarado que no matchea NINGUNA
+  // lectura real es una entrada obsoleta (la llamada que describia se borro o
+  // cambio de forma) y hay que sacarlo, no dejarlo de adorno.
+  for (const [rel, { llamadas }] of Object.entries(NO_VISIBILITY_ALLOWLIST)) {
+    const args = lecturaArgs(read(rel));
+
+    const sinFragmento = args.filter(
+      (arg) =>
+        !arg.includes("visibleExpensesWhere") &&
+        !arg.includes("visibleRecurringExpensesWhere") &&
+        !llamadas.some((fragmento) => arg.includes(fragmento))
+    );
+    assert.deepEqual(
+      sinFragmento,
+      [],
+      `${rel} tiene una lectura de Expense/RecurringExpense que no matchea ningun ` +
+        `fragmento de NO_VISIBILITY_ALLOWLIST ni usa la regla de visibilidad. Cuerpo(s): ` +
+        sinFragmento.join(" ||| ")
+    );
+
+    const obsoletos = llamadas.filter((fragmento) => !args.some((arg) => arg.includes(fragmento)));
+    assert.deepEqual(
+      obsoletos,
+      [],
+      `${rel} tiene fragmentos en NO_VISIBILITY_ALLOWLIST que ya no matchean ninguna ` +
+        `lectura real (entrada obsoleta, hay que borrarla): ${obsoletos.join(", ")}`
+    );
+  }
+});
+
 test("la regla de visibilidad se llama siempre con los ids del hogar", () => {
   // Un `visibleExpensesWhere(session.id)` de un argumento vuelve a la rama de
   // casa sin acotar, que es el agujero original. TypeScript ya lo rechaza; el
@@ -235,7 +395,7 @@ test("las entradas de las allowlists no quedaron obsoletas", () => {
       `${rel} ya no tiene una lectura con 'userId: session.id': sacarlo de BARE_USER_ID_ALLOWLIST (${motivo})`
     );
   }
-  for (const [rel, motivo] of Object.entries(NO_VISIBILITY_ALLOWLIST)) {
+  for (const [rel, { motivo }] of Object.entries(NO_VISIBILITY_ALLOWLIST)) {
     assert.ok(FILES.includes(rel), `NO_VISIBILITY_ALLOWLIST tiene un archivo que ya no existe: ${rel}`);
     assert.ok(
       READ_CALL.test(read(rel)),

@@ -25,6 +25,9 @@ implementadas o están incompletas en el sistema. Ordenadas por prioridad.
 | 5 | [Separación débito vs crédito en resumen](#5-separación-débito-vs-crédito) | ⬜ Pendiente | |
 | 6 | [Proyección crédito mes siguiente](#6-proyección-crédito-mes-siguiente) | ⬜ Pendiente | |
 | 7 | [Selector de mes histórico](#7-selector-de-mes-histórico) | ⬜ Pendiente | |
+| 12 | [Desaprender un alias](#12-desaprender-un-alias) | ⬜ Pendiente | |
+| 13 | [Backfill de consulta con el monto actual de la plantilla](#13-backfill-de-consulta-con-el-monto-actual-de-la-plantilla) | ⬜ Pendiente | Hoy inocuo: la ventana materializable es de un mes solo |
+| 14 | [Materialización secuencial de una consulta](#14-materializacion-secuencial-de-una-consulta) | ⬜ Pendiente | Hoy inocuo: hasta 240 idas a la base en el peor caso teórico |
 
 La numeración se conserva con huecos a propósito, para que las referencias
 viejas a "el ítem 9" no apunten a otra cosa.
@@ -125,6 +128,133 @@ vista de la casa, y ver los totales de ese período. La página de gastos ya tie
 navegación por mes — aplicar el mismo patrón al resto.
 
 Se cruza con la tendencia de 12 meses de la Rebanada 3.
+
+---
+
+### 12. Desaprender un alias
+
+**Descripción:** `src/lib/aliases.ts` graba un alias solo cuando una corrección
+cambia la categoría o el ámbito, y lo actualiza (pisándolo) cuando la misma
+descripción se vuelve a corregir. Pero si un alias se aprendió mal y esa
+descripción no vuelve a aparecer, no hay forma de sacarlo: sigue instalado y
+sigue entrando al prompt. Hoy no hay ninguna pantalla ni comando para borrar un
+alias existente.
+
+**No se resuelve con código en el Bloque 3B** a propósito: una pantalla de
+administración de aliases es alcance nuevo (CRUD + UI), y enseñarle al bot a
+"olvidar" por un mensaje de texto ("olvidate de X") es otra rebanada — abre las
+mismas preguntas de diseño que aprender (¿qué patrón exacto se borra? ¿lo puede
+pedir cualquiera de los dos o solo quien lo cargó?) sin que el bloque de
+consultas las necesite resolver.
+
+**Datos para quien lo tome, para no arrancar de cero:**
+
+- El patrón sale de la `description` del gasto (normalizada con
+  `normalizePattern`), no del texto del mensaje que corrige.
+- La clave del alias es `pattern` normalizado (`Alias.pattern`, único): borrar
+  o editar es un `delete`/`update` por esa clave.
+- `hits` existe justamente para poder ver cuáles alias no se usan nunca (un
+  alias con `hits: 0` después de mucho tiempo es candidato a revisar a mano) —
+  ver el comentario de `recordAliasHit` en `src/lib/aliases.ts`.
+- `TOPE_PARA_EL_PROMPT`, ordenado por `hits` descendente, ya limita el daño de
+  un alias mal aprendido que nadie usa: con el tiempo queda empujado fuera del
+  prompt por los que sí se usan. No es una solución (sigue en la base y puede
+  volver a entrar si empieza a "acertar" por casualidad), pero acota el impacto
+  mientras no existe una forma de borrarlo.
+
+**La opción rica que se descartó para la restricción de privacidad de los
+aliases (Bloque 3B, ola de arreglos B):** hoy `learnAlias` no aprende de un
+gasto `personal` porque `Alias` no tiene `userId` — un alias es global a los
+dos miembros del hogar, así que aprender de un gasto personal filtraría su
+descripción al contexto (y al proveedor de IA externo) de la otra persona,
+indefinidamente. Agregar un `userId` a `Alias` permitiría que cada persona
+tuviera sus propios aliases, y con eso volver a aprender de sus gastos
+personales sin cruzar la privacidad. **No entró** porque requiere migrar el
+schema (`prisma/schema.prisma`, con datos reales en la tabla) y no hacía falta
+para cerrar el hallazgo de privacidad: no aprender de personales alcanza y es
+mucho más simple.
+
+---
+
+### 13. Backfill de consulta con el monto actual de la plantilla
+
+**Descripción:** una consulta puede hacer *backfill* hasta 24 meses atrás en un
+solo mensaje (`CONSULTA_MESES_MAXIMOS`, `src/lib/ai/parse.ts`), y
+`resolveConsulta` (`src/lib/queries/aggregate.ts`) materializa cada mes del
+rango antes de leer. La materialización usa el monto que la plantilla
+recurrente tiene **hoy**, no el que tenía en el mes que se está creando (ver
+`materializeRecurringForMonth`, `src/lib/recurring-materialize.ts`).
+
+**Por qué hoy es inocuo:** `esPeriodoMaterializable` acota la ventana
+materializable a `[PRIMER_PERIODO_MATERIALIZABLE, el mes actual]`, y ese piso
+coincide con el mes actual (2026-08) al momento de escribir esto. La ventana
+real es de UN mes solo, así que no hay ningún mes "viejo" que backfillear con
+un monto equivocado todavía.
+
+**Por qué deja de serlo:** a partir de septiembre de 2026 el piso queda un mes
+atrás del actual, y crece cada mes que pasa. Una pregunta como "cómo venimos
+este año" puede entonces materializar el alquiler de un mes viejo (dentro de
+la ventana pero anterior al mes en curso) usando el monto de HOY, no el que la
+plantilla tenía en ese momento — si el alquiler se indexó en el medio, ese mes
+queda con un monto que nunca se cobró.
+
+---
+
+### 14. Materialización secuencial de una consulta
+
+**Descripción:** el loop de materialización de `resolveConsulta` es
+secuencial: mes por mes, y dentro de cada mes, plantilla por plantilla (ver
+`materializeRecurringForMonth`). Con el backfill de hasta 24 meses (ítem 13
+de arriba) y unas 10 plantillas activas, una sola consulta puede disparar
+hasta 240 idas a la base en serie antes de poder contestar.
+
+**El arreglo natural:** paralelizar por MES. Los meses son independientes
+entre sí — la idempotencia de la materialización es por
+`(recurringExpenseId, recurringPeriod)`, así que dos meses distintos nunca
+compiten por la misma fila — y no hace falta tocar la materialización POR
+plantilla dentro de cada mes, que puede seguir siendo secuencial.
+
+## 14 — Cuatro residuos de la re-review final del Bloque 3 ⬜
+
+Los encontró la re-review de las dos olas de arreglos. Ninguno corrompe datos por
+sí solo; los cuatro son sobre **qué le dice el bot a la persona** cuando algo
+falla, y los dos primeros valen una línea de código cada uno.
+
+1. **El catch de la Región 2 colapsa "quizás" en "nada" para una corrección por
+   texto.** Si `applyCorrection` tira, el mensaje afirma *"No quedó guardado nada:
+   reenviame el mensaje"*. Un throw no distingue "la transacción abortó" (que no
+   escribió nada) de "commiteó y se perdió el ack de red". En esa segunda ventana
+   el bot **instruye** la acción peligrosa: un reenvío sin reply cae al respaldo y
+   corrige otro gasto. Es la última asimetría entre el camino de texto y el de
+   botones, que sí distingue tres estados. Arreglo: atrapar el throw dentro de
+   `applyTextCorrection` y decir "no sé si se aplicó; si me la reenviás, respondé
+   a la misma confirmación".
+
+2. **La Región 3 describe una corrección como si fuera un alta.** Si falla el
+   `sendMessage` de la confirmación de una corrección, el log dice *"El Expense ya
+   está en la base… si reenvía, el gasto se duplica"* — falso: no se creó nada, y
+   el riesgo real es el opuesto (un reenvío sin reply corrige otro gasto). Arreglo:
+   distinguir los dos casos en el log y avisarle a la persona, que hoy en ese
+   camino no recibe nada.
+
+3. **"Mirá el gasto en la web" puede ser imposible.** Los mensajes de error del
+   camino de corrección mandan a la web, pero por la Regla de Dominio 5 un gasto
+   `personal` que esta persona **cargó pero no pagó** es editable desde el bot y no
+   existe para ella en la web. Arreglo: que el mensaje no prometa una acción que
+   puede no estar disponible.
+
+4. **Un alias sobrevive a que su gasto pase a `personal`.** `learnAlias` sólo
+   reacciona a un cambio de categoría, así que si se corrige la categoría de un
+   gasto de casa (se aprende el alias) y después se lo pasa a `personal`, el alias
+   queda con la descripción de un gasto hoy personal, en el prompt de los dos
+   miembros. La descripción se compartió legítimamente como "casa" en su momento,
+   pero no hay forma de desaprenderla: va pegado al ítem 12.
+
+Y dos asimetrías preexistentes que ahora tienen la herramienta para cerrarse: el
+`PUT` y el `DELETE` de `/api/expenses/[id]` siguen haciendo sus dos escrituras sin
+transacción común, mientras el bot ya usa las funciones atómicas de
+`src/lib/expenses/correct.ts`. Reusarlas ahí cierra el mismo modo de falla en la
+web.
 
 ---
 
