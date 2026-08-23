@@ -15,7 +15,7 @@
  * Se hace con comandos raw porque Prisma no puede escribir campos que su propio
  * schema no conoce, ni leer documentos a los que les falta un campo requerido.
  *
- * ES IDEMPOTENTE: cada update filtra por `$exists: false`, asi que nunca
+ * ES IDEMPOTENTE: cada update filtra por `{ campo: null }`, asi que nunca
  * sobreescribe un documento que ya tiene el campo. Correrlo dos veces no
  * cambia nada la segunda vez.
  *
@@ -124,19 +124,62 @@ async function applyUpdate(
   const res = (await prisma.$runCommandRaw({
     update: collection,
     updates: [{ q, u, multi: true }],
-  } as never)) as { n: number; nModified: number };
-  console.log(`  ${label}: ${res.nModified} documentos modificados`);
-  return res.nModified;
+  } as never)) as {
+    ok?: number;
+    n?: number;
+    nModified?: number;
+    writeErrors?: { index: number; code: number; errmsg: string }[];
+  };
+
+  // El comando `update` reporta los fallos POR SENTENCIA dentro de
+  // `writeErrors`, con `ok: 1` a nivel comando. Si no se miran, una escritura
+  // fallida imprime un alegre "0 documentos modificados" y el script sigue como
+  // si nada — y `cleanDeadFields()` corre DESPUES de los drops, sin ninguna
+  // compuerta que lo agarre. Asi que aca se explota.
+  if (res.ok !== 1) {
+    throw new Error(
+      `Fallo el update sobre ${collection} (${label}): ok=${res.ok}. ` +
+        `Respuesta: ${JSON.stringify(res)}`
+    );
+  }
+  if (res.writeErrors && res.writeErrors.length > 0) {
+    throw new Error(
+      `Fallo el update sobre ${collection} (${label}): ${JSON.stringify(res.writeErrors)}`
+    );
+  }
+
+  const matched = res.n ?? 0;
+  const modified = res.nModified ?? 0;
+  // Se loguean los dos juntos a proposito: si matched != modified hubo
+  // documentos que matchearon el filtro y no se escribieron.
+  const flag = matched === modified ? "" : "   <-- OJO: matched != modified";
+  console.log(`  ${label}: matched=${matched} modified=${modified}${flag}`);
+  return modified;
 }
 
 async function backfill(collections: string[]) {
   console.log("\n== BACKFILL ==");
 
+  // POR QUE `{ campo: null }` Y NO `{ campo: { $exists: false } }`:
+  //
+  // En MongoDB un campo puesto explicitamente en `null` EXISTE. Un documento con
+  // `scope: null` es invisible para `$exists: false`, pero Prisma igual se niega
+  // a leerlo, con el mismo error que este script existe para arreglar:
+  //
+  //   Inconsistent query result: Field scope is required to return data, got `null` instead.
+  //
+  // O sea que `$exists: false` seria ciego justo al caso que hay que migrar, y
+  // la compuerta de mas abajo reportaria "ausente o null en 0 documentos" sobre
+  // un documento sin migrar, dejando pasar el drop irreversible de las 8
+  // colecciones. `{ campo: null }` matchea las DOS cosas: ausente y null.
+  //
+  // Sigue siendo idempotente: un documento que ya tiene "casa" no matchea `null`.
+
   if (collections.includes("Expense")) {
     console.log("Expense:");
     // Todo el historial se cargo cuando la app era de gastos compartidos del
     // hogar, asi que "casa" es el scope correcto.
-    await applyUpdate("Expense", "scope = 'casa'", { scope: { $exists: false } }, {
+    await applyUpdate("Expense", "scope = 'casa'", { scope: null }, {
       $set: { scope: "casa" },
     });
     // `userId` era el dueño del registro y tambien quien pago, asi que
@@ -148,18 +191,18 @@ async function backfill(collections: string[]) {
     await applyUpdate(
       "Expense",
       "createdById = userId (ObjectId)",
-      { createdById: { $exists: false } },
+      { createdById: null },
       [{ $set: { createdById: "$userId" } }]
     );
     // Ninguno vino del bot: el bot todavia no existia.
-    await applyUpdate("Expense", "source = 'web'", { source: { $exists: false } }, {
+    await applyUpdate("Expense", "source = 'web'", { source: null }, {
       $set: { source: "web" },
     });
   }
 
   if (collections.includes("RecurringExpense")) {
     console.log("RecurringExpense:");
-    await applyUpdate("RecurringExpense", "scope = 'casa'", { scope: { $exists: false } }, {
+    await applyUpdate("RecurringExpense", "scope = 'casa'", { scope: null }, {
       $set: { scope: "casa" },
     });
   }
@@ -181,9 +224,9 @@ async function assertBackfillComplete() {
   for (const [collection, field] of checks) {
     const missing = (await prisma.$runCommandRaw({
       count: collection,
-      query: { [field]: { $exists: false } },
+      query: { [field]: null },
     } as never)) as { n: number };
-    console.log(`  ${collection}.${field} faltante en ${missing.n} documentos`);
+    console.log(`  ${collection}.${field} ausente o null en ${missing.n} documentos`);
     if (missing.n > 0) ok = false;
   }
   // La trampa: createdById tiene que haber quedado como objectId, no string.

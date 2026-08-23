@@ -95,8 +95,20 @@ un `scope`.
 ## ProcessedUpdate
 
 Idempotencia del webhook de Telegram. `updateId` (el `update_id` de Telegram,
-como string) es único: si el mismo update llega dos veces —y Telegram reintenta—
-el segundo se descarta y no se duplica el gasto.
+como string) es único.
+
+**El orden es parte del mecanismo, no un detalle.** El `update_id` se inserta
+**ANTES** de procesar el update, y **la violación del índice único ES la señal de
+reintento**: si el insert falla con `E11000`, ese update ya se está procesando (o
+se procesó), así que se descarta y se responde `200`.
+
+Insertarlo *después* de procesar no sirve, y es el error natural de cometer.
+Telegram reintenta cuando el webhook tarda, y OCR con WASM más una llamada a Grok
+puede tardar 15-20s en Vercel Hobby: en esa ventana el registro todavía no
+existiría, el reintento pasaría el chequeo y **el gasto se cargaría dos veces**.
+Es justamente el bug que este modelo existe para evitar.
+
+Ver la §6 del [diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).
 
 ## Pasos manuales en Mongo
 
@@ -111,13 +123,42 @@ sí en un índice único plano. Prisma no puede expresar `sparse` ni
 
 `User.telegramChatId` y `User.telegramLinkCode` son `String?  @unique`. Los dos
 índices **tienen que existir en la base como `unique: true, sparse: true`**, con
-exactamente estos nombres:
+exactamente estos nombres.
+
+**Hay que borrar el índice plano antes de crear el sparse.** `createIndexes` con
+un nombre que ya existe y opciones distintas **no lo reemplaza**: MongoDB lo
+rechaza con `IndexOptionsConflict` (código 85) y el índice plano queda como
+estaba. Y en una base nueva el plano casi siempre ya está, porque lo creó el
+primer `prisma db push` sobre la colección vacía (con 0 o 1 usuario no hay
+colisión, así que el push pasa sin problema). Por eso el procedimiento es
+**drop-then-recreate**, no `createIndexes` a secas.
+
+El `dropIndex` tiene que tolerar que el índice todavía no exista
+(`IndexNotFound`, código 27) — pasa si `db push` nunca corrió, o si un push
+anterior abortó **durante** ese index build y lo dejó sin crear:
 
 ```js
+// Correr en mongosh, sobre la base de la app.
+for (const name of ["User_telegramChatId_key", "User_telegramLinkCode_key"]) {
+  try {
+    db.User.dropIndex(name);
+    print(`dropeado ${name}`);
+  } catch (e) {
+    if (e.code === 27) {          // IndexNotFound: todavia no existia, todo bien
+      print(`${name} no existia`);
+    } else {
+      throw e;                    // cualquier otra cosa NO se ignora
+    }
+  }
+}
+
 db.User.createIndexes([
   { key: { telegramChatId: 1 },   name: "User_telegramChatId_key",   unique: true, sparse: true },
   { key: { telegramLinkCode: 1 }, name: "User_telegramLinkCode_key", unique: true, sparse: true },
 ]);
+
+// Control: los dos tienen que salir con unique:true y sparse:true.
+db.User.getIndexes();
 ```
 
 **Cuándo hay que crearlos en una base nueva: antes de que se registre el SEGUNDO

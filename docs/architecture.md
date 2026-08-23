@@ -86,10 +86,15 @@ El resto del pipeline consume `Intake` y no sabe nada de Telegram. Es lo que
 permitiría sumar WhatsApp después sin reescribir la ingesta.
 
 El webhook (`src/app/api/telegram/webhook/route.ts`) valida el header
-`X-Telegram-Bot-Api-Secret-Token`, descarta updates ya procesados vía
-`ProcessedUpdate`, resuelve el usuario por `telegramChatId` (whitelist) y
-**siempre responde 200**: un error propagado hace que Telegram reintente y
-duplique gastos.
+`X-Telegram-Bot-Api-Secret-Token`, inserta el `update_id` en `ProcessedUpdate`
+**antes de procesar** —y trata la violación del índice único como la señal de que
+es un reintento, descartándolo—, resuelve el usuario por `telegramChatId`
+(whitelist) y **siempre responde 200**: un error propagado hace que Telegram
+reintente y duplique gastos.
+
+El orden importa: insertar *después* de procesar deja abierta la ventana de 15-20s
+que puede tardar OCR + LLM, y en esa ventana el reintento de Telegram pasa el
+chequeo y carga el gasto dos veces.
 
 ### `src/lib/ai/` — el parseo del mensaje
 
@@ -118,7 +123,9 @@ el mismo pipeline que un gasto escrito.
 
 - **Visibilidad**: toda lectura de gastos pasa por `visibleExpensesWhere()`. Ver
   las reglas de dominio en [CLAUDE.md](../CLAUDE.md).
-- **Idempotencia**: el webhook por `ProcessedUpdate.updateId`; la
-  materialización de recurrentes por `(recurringExpenseId, recurringPeriod)`.
+- **Idempotencia**: el webhook inserta `ProcessedUpdate.updateId` **antes** de
+  procesar y usa el fallo del índice único como señal de reintento; la
+  materialización de recurrentes va por `(recurringExpenseId, recurringPeriod)`.
   Las dos son defensas contra duplicados silenciosos, que es la falla más
-  peligrosa del sistema porque no se nota.
+  peligrosa del sistema porque no se nota. En las dos, **escribir la marca
+  después del trabajo anula la defensa**.
