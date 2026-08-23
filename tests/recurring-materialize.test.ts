@@ -225,3 +225,23 @@ test("periodoMaterializable expone los limites para los tests y los llamadores",
   assert.equal(esPeriodoMaterializable(2026, 9, new Date(2026, 7, 23)), false);
   assert.equal(esPeriodoMaterializable(2026, 8, new Date(2027, 0, 5)), true);
 });
+
+// ─── Mes 13 en un techo futuro: el bug que la comparacion de strings no ve ──
+
+test("mes 13 no materializa aunque el techo ya este en 2027 (la clave '2026-13' no puede colarse por delante de '2027-01')", () => {
+  // Esta es la razon REAL por la que el test de "un mes fuera de 1-12" de mas
+  // arriba tiene que pasar siempre y no solo hoy: fijando `hoy` en 2027, sin
+  // el guard de rango "2026-13" es >= "2026-08" (piso) y < "2027-01" (techo con
+  // hoy en 2027), asi que colaba. Con el guard, se rechaza por rango antes de
+  // construir la clave, sin importar que diga el reloj.
+  const { client, creados } = clienteFalso([ALQUILER]);
+  const hoyEn2027 = new Date(2027, 0, 5);
+  assert.equal(esPeriodoMaterializable(2026, 13, hoyEn2027), false);
+  return materializeRecurringForMonth(client as any, 2026, 13).then(() => {
+    assert.equal(creados.length, 0);
+  });
+});
+
+test("mes 99 no materializa (year=2026&month=99 no puede dar una clave admitida)", () => {
+  assert.equal(esPeriodoMaterializable(2026, 99, new Date(2034, 8, 5)), false);
+});

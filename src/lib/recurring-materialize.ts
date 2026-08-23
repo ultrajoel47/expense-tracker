@@ -59,9 +59,13 @@ export const PRIMER_PERIODO_MATERIALIZABLE = "2026-08";
  *
  * Se compara con los strings de `periodKey`, no con numeros: el mes viene con
  * dos digitos y el año con cuatro, asi que el orden lexicografico es el orden
- * cronologico. De paso rechaza por construccion cualquier basura que llegue
- * igual (mes 13 -> "2026-13" queda por encima del techo, mes 0 -> "2026-00"
- * por debajo del piso, `NaN` -> "NaN-NaN" por encima de todo).
+ * cronologico PARA MESES VALIDOS (1-12). Un mes fuera de ese rango no queda
+ * rechazado por la comparacion de strings: por ejemplo mes 13 -> "2026-13" es
+ * lexicograficamente MAYOR que el piso "2026-08" pero tambien MENOR que
+ * "2027-01", asi que en cuanto el techo llegue a 2027 esa clave cae DENTRO de
+ * la ventana en vez de por encima. Esa clave no colisiona con la de enero de
+ * 2027 ("2027-01"), asi que el alquiler de ese mes se crearia dos veces. Por
+ * eso el mes se valida por RANGO antes de armar la clave, no despues.
  *
  * `hoy` es un parametro para que los tests puedan fijar el techo; en
  * produccion se usa el reloj. Se lee en hora local, igual que el resto del
@@ -72,6 +76,13 @@ export function esPeriodoMaterializable(
   month: number,
   hoy: Date = new Date()
 ): boolean {
+  // Un mes fuera de 1-12 produce una clave que puede caer DENTRO de la ventana
+  // en un año futuro ("2026-13" es >= "2026-08" y < "2027-01"), y esa clave no
+  // colisiona con "2027-01", asi que el alquiler se crearia dos veces en el mismo
+  // mes real. La comparacion de strings no puede detectarlo: hay que rechazar el
+  // mes por rango, antes de construir la clave.
+  if (!Number.isInteger(month) || month < 1 || month > 12) return false;
+
   const periodo = periodKey(year, month);
   if (periodo < PRIMER_PERIODO_MATERIALIZABLE) return false;
   if (periodo > periodKey(hoy.getFullYear(), hoy.getMonth() + 1)) return false;
