@@ -8,6 +8,7 @@ import { parseMessage } from "@/lib/ai/parse";
 import { getAiProvider } from "@/lib/ai/provider";
 import { todayInBuenosAires } from "@/lib/ai/normalize";
 import { buildConfirmation, isAnomalous } from "@/lib/expenses/create-from-bot";
+import { getHouseholdUserIds } from "@/lib/household";
 
 /** Telegram reintenta ante cualquier respuesta que no sea 200. Siempre 200. */
 const OK = () => NextResponse.json({ ok: true });
@@ -41,11 +42,15 @@ export async function POST(req: Request) {
   try {
     if (!(await claimUpdate(prisma, intake.updateId))) return OK();
 
+    // Los miembros del hogar: acota el /start, la whitelist y la lista de
+    // pagadores que se le pasa a la IA. Ver src/lib/household.ts.
+    const householdUserIds = await getHouseholdUserIds();
+
     // /start <codigo>: vincula el chat con el usuario
     const startMatch = intake.text?.match(/^\/start\s+([a-f0-9]{8})$/i);
     if (startMatch) {
       const user = await prisma.user.findFirst({
-        where: { telegramLinkCode: startMatch[1].toLowerCase() },
+        where: { id: { in: householdUserIds }, telegramLinkCode: startMatch[1].toLowerCase() },
       });
       if (!user) {
         await sendMessage(intake.chatId, "Ese codigo no es valido o ya se uso.");
@@ -73,9 +78,12 @@ export async function POST(req: Request) {
       return OK();
     }
 
-    // Whitelist: solo los chats vinculados. El resto se ignora en silencio.
+    // Whitelist: solo los chats vinculados A UN MIEMBRO DEL HOGAR. El resto se
+    // ignora en silencio. El filtro por miembro es defensa en profundidad: si
+    // quedara una cuenta vieja vinculada y su email saliera de la allowlist,
+    // deja de poder cargar gastos sin necesidad de desvincular el chat a mano.
     const user = await prisma.user.findFirst({
-      where: { telegramChatId: intake.chatId },
+      where: { id: { in: householdUserIds }, telegramChatId: intake.chatId },
     });
     if (!user) return OK();
 
@@ -86,7 +94,13 @@ export async function POST(req: Request) {
 
     const [categories, members] = await Promise.all([
       prisma.category.findMany({ select: { id: true, name: true } }),
-      prisma.user.findMany({ select: { id: true, name: true } }),
+      // Solo los miembros del hogar son pagadores resolubles. Antes esto era
+      // `findMany()` sin filtro: un tercero registrado aparecia en la lista
+      // que se le manda a la IA y quedaba como nombre de pagador valido.
+      prisma.user.findMany({
+        where: { id: { in: householdUserIds } },
+        select: { id: true, name: true },
+      }),
     ]);
 
     const parsed = await parseMessage(

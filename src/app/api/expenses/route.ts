@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere } from "@/lib/visibility";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+  const householdUserIds = await getHouseholdUserIds();
 
   const url = new URL(req.url);
   const month = url.searchParams.get("month");
@@ -16,7 +19,7 @@ export async function GET(req: Request) {
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1"));
   const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") ?? "25")));
 
-  const where: Record<string, unknown> = { ...visibleExpensesWhere(session.id) };
+  const where: Record<string, unknown> = { ...visibleExpensesWhere(session.id, householdUserIds) };
   const andConditions: Record<string, unknown>[] = [];
   let startDate: Date | null = null;
   let endDate: Date | null = null;

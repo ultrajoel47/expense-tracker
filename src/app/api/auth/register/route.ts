@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signToken } from "@/lib/auth";
+import { isHouseholdMemberEmail } from "@/lib/household";
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +10,18 @@ export async function POST(req: Request) {
 
     if (!email || !password || !name) {
       return NextResponse.json({ error: "Todos los campos son requeridos" }, { status: 400 });
+    }
+
+    // El registro NO es publico: esta app es el tracker de gastos de un hogar
+    // concreto, y quien tiene cuenta es, por definicion, miembro del hogar
+    // (ver src/lib/household.ts). Sin este chequeo cualquiera que se
+    // registrara en el dominio publico leia, editaba y borraba todo el
+    // historial financiero.
+    if (!isHouseholdMemberEmail(email)) {
+      return NextResponse.json(
+        { error: "Este email no esta habilitado para crear una cuenta" },
+        { status: 403 }
+      );
     }
 
     const exists = await prisma.user.findUnique({ where: { email } });

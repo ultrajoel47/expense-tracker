@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere, visibleRecurringExpensesWhere } from "@/lib/visibility";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+  const householdUserIds = await getHouseholdUserIds();
 
   const url = new URL(req.url);
   const month = Number(url.searchParams.get("month") || new Date().getMonth() + 1);
@@ -17,7 +20,7 @@ export async function GET(req: Request) {
   // Current month expenses
   const expenses = await prisma.expense.findMany({
     where: {
-      ...visibleExpensesWhere(session.id),
+      ...visibleExpensesWhere(session.id, householdUserIds),
       date: { gte: startDate, lt: endDate },
     },
     include: { category: true },
@@ -28,7 +31,7 @@ export async function GET(req: Request) {
   const prevStart = new Date(Date.UTC(year, month - 2, 1));
   const prevEnd = new Date(Date.UTC(year, month - 1, 1));
   const prevExpenses = await prisma.expense.findMany({
-    where: { ...visibleExpensesWhere(session.id), date: { gte: prevStart, lt: prevEnd } },
+    where: { ...visibleExpensesWhere(session.id, householdUserIds), date: { gte: prevStart, lt: prevEnd } },
   });
   const prevTotal = prevExpenses.reduce((s: number, e: any) => s + e.amount, 0);
 
@@ -96,7 +99,7 @@ export async function GET(req: Request) {
   let allTimeRecent: typeof recentExpenses = [];
   if (expenses.length === 0) {
     const latest = await prisma.expense.findMany({
-      where: { ...visibleExpensesWhere(session.id) },
+      where: { ...visibleExpensesWhere(session.id, householdUserIds) },
       include: { category: true },
       orderBy: { date: "desc" },
       take: 10,
@@ -115,7 +118,7 @@ export async function GET(req: Request) {
     by: ["expenseId"],
     where: {
       paid: false,
-      expense: { ...visibleExpensesWhere(session.id), creditCardId: { not: null } },
+      expense: { ...visibleExpensesWhere(session.id, householdUserIds), creditCardId: { not: null } },
     },
     _sum: { amount: true },
   });
@@ -126,7 +129,7 @@ export async function GET(req: Request) {
   in30Days.setDate(in30Days.getDate() + 30);
   const upcomingRecurring = await prisma.recurringExpense.findMany({
     where: {
-      ...visibleRecurringExpensesWhere(session.id),
+      ...visibleRecurringExpensesWhere(session.id, householdUserIds),
       active: true,
       nextDue: { lte: in30Days },
     },

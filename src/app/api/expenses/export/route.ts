@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { visibleExpensesWhere } from "@/lib/visibility";
+import { getHouseholdUserIds } from "@/lib/household";
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+  const householdUserIds = await getHouseholdUserIds();
 
   const url = new URL(req.url);
   const month = Number(url.searchParams.get("month") || new Date().getMonth() + 1);
@@ -15,7 +18,7 @@ export async function GET(req: Request) {
   const endDate = new Date(Date.UTC(year, month, 1));
 
   const expenses = await prisma.expense.findMany({
-    where: { ...visibleExpensesWhere(session.id), date: { gte: startDate, lt: endDate } },
+    where: { ...visibleExpensesWhere(session.id, householdUserIds), date: { gte: startDate, lt: endDate } },
     include: { category: true },
     orderBy: { date: "asc" },
   });
