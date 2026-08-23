@@ -540,11 +540,22 @@ async function handleCallback(
   // string aparte es lo unico que el catch necesita nombrar.
   let expenseIdParaLog: string | undefined;
 
-  // Los case de scope, category y deleteConfirm escriben ANTES de reescribir el
-  // mensaje. Si falla el `edit*`, el cambio YA esta en la base: decirle a la
-  // persona "no pude aplicar el cambio" seria mentirle, y en el caso del
-  // borrado seria mentirle sobre algo irreversible. Se marca antes de escribir.
-  let yaEscribio = false;
+  /**
+   * En que punto de la escritura quedo el callback cuando algo tira. Son TRES
+   * estados y ninguno se puede colapsar en los otros dos:
+   *
+   *  - "nada": todavia no se intento escribir. Se puede negar el cambio.
+   *  - "quizas": se llamo a la escritura y no volvio. Puede haberse aplicado o
+   *    no, y NO se puede afirmar ninguna de las dos cosas. Es el unico estado
+   *    honesto para un borrado que tiro.
+   *  - "si": la escritura volvio bien y fallo algo posterior (reescribir el
+   *    mensaje, acusar el callback). El cambio esta aplicado.
+   *
+   * Antes esto era un booleano seteado antes de escribir, asi que un borrado
+   * fallido contestaba "el cambio se aplico" sobre la unica accion irreversible
+   * del teclado.
+   */
+  let escritura: "nada" | "quizas" | "si" = "nada";
 
   try {
     // Un dato invalido no puede llegar a Prisma: un ObjectId mal formado hace
@@ -634,8 +645,9 @@ async function handleCallback(
       }
 
       case "scope": {
-        yaEscribio = true;
+        escritura = "quizas";
         const corrected = await applyCorrection(prisma, expense, { scope: action.scope }, categories);
+        escritura = "si";
         // Corre DESPUES de la escritura, con su propio onError: ver el
         // comentario del mismo llamado en `applyTextCorrection`. No se
         // hardcodea "solo cambio el ambito": se compara contra `expense`
@@ -685,13 +697,14 @@ async function handleCallback(
           break;
         }
 
-        yaEscribio = true;
+        escritura = "quizas";
         const corrected = await applyCorrection(
           prisma,
           expense,
           { categoryName: category.name },
           categories
         );
+        escritura = "si";
         // Mismo patron que el case "scope" de arriba: se compara contra el
         // estado de ANTES en vez de asumir "solo cambio la categoria", para
         // que siga siendo correcto si este boton algun dia tambien tocara
@@ -732,8 +745,9 @@ async function handleCallback(
       }
 
       case "deleteConfirm": {
-        yaEscribio = true;
+        escritura = "quizas";
         await deleteExpenseWithInstallments(prisma, action.expenseId);
+        escritura = "si";
         // Sin teclado: un teclado sobre un gasto inexistente solo puede dar
         // errores.
         if (intake.callbackMessageId) {
@@ -748,22 +762,39 @@ async function handleCallback(
       }
     }
   } catch (error) {
-    console.error(
-      yaEscribio
-        ? `CAMBIO APLICADO SIN CONFIRMAR: expenseId=${expenseIdParaLog} ` +
-            `chatId=${intake.chatId} — la escritura en la base pudo haberse ` +
-            "aplicado y fallo lo que viene despues (reescribir el mensaje o " +
-            "acusar el callback). El mensaje del chat puede estar mostrando el " +
-            "estado viejo."
-        : `Error procesando el callback expenseId=${expenseIdParaLog} chatId=${intake.chatId} — ` +
-            "no se escribio nada.",
-      error
-    );
+    if (escritura === "nada") {
+      console.error(
+        `Error procesando el callback expenseId=${expenseIdParaLog} chatId=${intake.chatId} — ` +
+          "no se escribio nada.",
+        error
+      );
+    } else if (escritura === "quizas") {
+      // Estado indeterminado a proposito: no se puede afirmar ni negar que la
+      // escritura se aplico. Es el caso de un `deleteExpenseWithInstallments`
+      // (o un `applyCorrection`) que tiro sin que sepamos si llego a
+      // confirmarse en la base antes de fallar.
+      console.error(
+        `ESTADO INDETERMINADO: expenseId=${expenseIdParaLog} chatId=${intake.chatId} — ` +
+          "la escritura en la base tiro y NO se puede saber si se aplico o no. " +
+          "Revisar a mano antes de asumir nada.",
+        error
+      );
+    } else {
+      console.error(
+        `CAMBIO APLICADO SIN CONFIRMAR: expenseId=${expenseIdParaLog} ` +
+          `chatId=${intake.chatId} — la escritura en la base SI se aplico y fallo lo ` +
+          "que viene despues (reescribir el mensaje o acusar el callback). El mensaje " +
+          "del chat puede estar mostrando el estado viejo.",
+        error
+      );
+    }
     try {
       await acusar(
-        yaEscribio
-          ? "El cambio se aplico, pero no pude actualizar el mensaje. Mira el dashboard."
-          : "No pude aplicar el cambio por un error de mi lado."
+        escritura === "nada"
+          ? "No pude aplicar el cambio por un error de mi lado."
+          : escritura === "quizas"
+            ? "No se si el cambio se alcanzo a aplicar. Mira el gasto en la web antes de volver a tocar el boton."
+            : "El cambio se aplico, pero no pude actualizar el mensaje. Mira el dashboard."
       );
     } catch (avisoError) {
       // El catch del acuse va aparte y solo loguea: si falla el acuse no
