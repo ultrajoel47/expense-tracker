@@ -18,36 +18,47 @@ function query(over: Partial<ConsultaQuery> = {}): ConsultaQuery {
 // ─── el periodo entendido siempre aparece ───────────────────────────────────
 
 test("el encabezado dice el rango en dd/MM", () => {
-  const answer: ConsultaAnswer = { kind: "total", total: 1000, cantidad: 1 };
+  const answer: ConsultaAnswer = { kind: "total", total: 1000, cantidad: 1, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query());
   assert.match(texto, /01\/08 al 23\/08/);
 });
 
 test("el encabezado nombra la categoria y el ambito cuando vinieron en la consulta", () => {
-  const answer: ConsultaAnswer = { kind: "total", total: 1000, cantidad: 1 };
+  const answer: ConsultaAnswer = { kind: "total", total: 1000, cantidad: 1, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query({ categoryName: "Ropa", scope: "personal" }));
   assert.match(texto, /Ropa/);
   assert.match(texto, /personales/);
 });
 
+test("una categoria con caracteres de HTML sale escapada en el encabezado", () => {
+  const answer: ConsultaAnswer = { kind: "total", total: 1000, cantidad: 1, materializacionFallida: false };
+  const texto = formatConsultaAnswer(answer, query({ categoryName: "Casa & Jardín" }));
+  assert.match(texto, /Casa &amp; Jardín/);
+  assert.doesNotMatch(texto, /Casa & Jardín/);
+});
+
 // ─── total ──────────────────────────────────────────────────────────────
 
-test("total con gastos muestra el monto y la cantidad", () => {
-  const answer: ConsultaAnswer = { kind: "total", total: 80000, cantidad: 3 };
+test("total con gastos muestra el monto y la cantidad, en 'movimientos' (no 'gastos')", () => {
+  // Item 7: una compra en 3 cuotas dentro del rango son 3 CARGOS de un solo
+  // gasto. "3 gastos" es una cuenta falsa; "movimientos" es correcto sin
+  // importar si son gastos sueltos o cuotas de una sola compra.
+  const answer: ConsultaAnswer = { kind: "total", total: 80000, cantidad: 3, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query());
   assert.match(texto, /\$\s?80\.000/);
-  assert.match(texto, /3 gastos/);
+  assert.match(texto, /3 movimientos/);
+  assert.doesNotMatch(texto, /gastos?\b/);
 });
 
 test("total con un solo gasto usa el singular", () => {
-  const answer: ConsultaAnswer = { kind: "total", total: 5000, cantidad: 1 };
+  const answer: ConsultaAnswer = { kind: "total", total: 5000, cantidad: 1, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query());
-  assert.match(texto, /1 gasto\b/);
-  assert.doesNotMatch(texto, /1 gastos/);
+  assert.match(texto, /1 movimiento\b/);
+  assert.doesNotMatch(texto, /1 movimientos/);
 });
 
 test("total sin gastos dice que no hay, no un $0 sin contexto", () => {
-  const answer: ConsultaAnswer = { kind: "total", total: 0, cantidad: 0 };
+  const answer: ConsultaAnswer = { kind: "total", total: 0, cantidad: 0, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query());
   assert.match(texto, /no encontre gastos/);
   assert.doesNotMatch(texto, /\$/);
@@ -63,11 +74,23 @@ test("por_categoria lista las categorias y un total al pie", () => {
       { categoryName: "Ropa", total: 20000 },
     ],
     total: 70000,
+    materializacionFallida: false,
   };
   const texto = formatConsultaAnswer(answer, query({ metric: "por_categoria" }));
   assert.match(texto, /Supermercado.*50\.000/);
   assert.match(texto, /Ropa.*20\.000/);
   assert.match(texto, /Total.*70\.000/);
+});
+
+test("por_categoria escapa un nombre de categoria con caracteres de HTML", () => {
+  const answer: ConsultaAnswer = {
+    kind: "por_categoria",
+    filas: [{ categoryName: "Casa & Jardín", total: 1000 }],
+    total: 1000,
+    materializacionFallida: false,
+  };
+  const texto = formatConsultaAnswer(answer, query({ metric: "por_categoria" }));
+  assert.match(texto, /Casa &amp; Jardín/);
 });
 
 test("por_categoria corta la cola en un 'y N mas' cuyo subtotal mas las lineas visibles cierra con el total", () => {
@@ -76,7 +99,7 @@ test("por_categoria corta la cola en un 'y N mas' cuyo subtotal mas las lineas v
     total: 100 - i, // descendente
   }));
   const total = filas.reduce((s, f) => s + f.total, 0);
-  const answer: ConsultaAnswer = { kind: "por_categoria", filas, total };
+  const answer: ConsultaAnswer = { kind: "por_categoria", filas, total, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query({ metric: "por_categoria" }));
 
   assert.match(texto, /y 2 más/);
@@ -89,7 +112,7 @@ test("por_categoria corta la cola en un 'y N mas' cuyo subtotal mas las lineas v
 });
 
 test("por_categoria sin filas dice que no hay gastos", () => {
-  const answer: ConsultaAnswer = { kind: "por_categoria", filas: [], total: 0 };
+  const answer: ConsultaAnswer = { kind: "por_categoria", filas: [], total: 0, materializacionFallida: false };
   const texto = formatConsultaAnswer(answer, query({ metric: "por_categoria" }));
   assert.match(texto, /no encontre gastos/);
 });
@@ -103,6 +126,7 @@ test("tendencia lista un mes por linea con su nombre", () => {
       { periodo: "2026-07", total: 30000 },
       { periodo: "2026-08", total: 45000 },
     ],
+    materializacionFallida: false,
   };
   const texto = formatConsultaAnswer(answer, query({ metric: "tendencia" }));
   assert.match(texto, /julio/i);
@@ -118,7 +142,23 @@ test("tendencia con todos los meses en 0 dice que no hay gastos", () => {
       { periodo: "2026-07", total: 0 },
       { periodo: "2026-08", total: 0 },
     ],
+    materializacionFallida: false,
   };
   const texto = formatConsultaAnswer(answer, query({ metric: "tendencia" }));
   assert.match(texto, /no encontre gastos/);
+});
+
+// ─── item 3: aviso de materializacion fallida ──────────────────────────────
+
+test("materializacionFallida true agrega una linea de advertencia visible", () => {
+  const answer: ConsultaAnswer = { kind: "total", total: 5000, cantidad: 1, materializacionFallida: true };
+  const texto = formatConsultaAnswer(answer, query());
+  assert.match(texto, /⚠/);
+  assert.match(texto, /incompleto|CORTO/i);
+});
+
+test("materializacionFallida false no agrega ninguna advertencia", () => {
+  const answer: ConsultaAnswer = { kind: "total", total: 5000, cantidad: 1, materializacionFallida: false };
+  const texto = formatConsultaAnswer(answer, query());
+  assert.doesNotMatch(texto, /⚠/);
 });

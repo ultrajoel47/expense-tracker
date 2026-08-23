@@ -10,13 +10,18 @@
  *
  * Puro: sin `@/`, imports relativos con extension.
  */
-import { formatArs } from "../format.ts";
+import { formatArs, escapeHtml } from "../format.ts";
 import type { ConsultaAnswer } from "./aggregate.ts";
 import type { ConsultaQuery } from "../ai/types.ts";
 
 /** Cuantas categorias se listan como mucho en "por_categoria" antes de
- * agrupar el resto en un "y N mas". Un mensaje de Telegram no es una tabla:
- * mas de esto y la respuesta deja de leerse de un vistazo. */
+ * agrupar el resto en un "y N mas". Un mensaje de Telegram se lee en el
+ * celular, de un vistazo y sin scroll: 8 lineas mas el encabezado y el pie
+ * ("Total: ...") entran enteras en la pantalla de un telefono sin cortar. La
+ * cola agrupada existe para que ese recorte no pierda plata de vista: sus N
+ * categorias se funden en una sola linea cuyo monto es la suma exacta de lo
+ * que quedo afuera, asi que "Total" siempre cierra con la suma de TODAS las
+ * categorias, visibles o no. */
 const MAX_FILAS_POR_CATEGORIA = 8;
 
 /**
@@ -58,7 +63,7 @@ function describirRango(from: Date, to: Date): string {
  * tiene que ver que la pregunta se entendio acotada a eso. */
 function describirAlcance(query: ConsultaQuery): string {
   const partes: string[] = [];
-  if (query.categoryName) partes.push(`en ${query.categoryName}`);
+  if (query.categoryName) partes.push(`en ${escapeHtml(query.categoryName)}`);
   if (query.scope === "casa") partes.push("de casa");
   if (query.scope === "personal") partes.push("personales");
   return partes.length ? ` (${partes.join(", ")})` : "";
@@ -77,33 +82,53 @@ function nombreMes(periodo: string): string {
   );
 }
 
+/**
+ * La linea de advertencia cuando `answer.materializacionFallida` es `true`, en
+ * el mismo tono que el aviso ambar del dashboard (`stats.recurringMaterializationFailed`
+ * en `dashboard/page.tsx`): la materializacion de algun mes del rango fallo, asi
+ * que el numero recien mostrado puede estar CORTO (le puede faltar el alquiler
+ * o algun otro recurrente de ese mes). Se antepone un salto de linea para que
+ * quede separada del cuerpo, nunca pegada a la ultima cifra.
+ */
+function avisoMaterializacion(materializacionFallida: boolean): string {
+  return materializacionFallida
+    ? "\n⚠ No se pudieron actualizar los gastos recurrentes de algun mes de este " +
+        "periodo (por ejemplo el alquiler): el numero de arriba puede estar CORTO."
+    : "";
+}
+
 export function formatConsultaAnswer(answer: ConsultaAnswer, query: ConsultaQuery): string {
   const header = encabezado(query);
+  const aviso = avisoMaterializacion(answer.materializacionFallida);
 
   if (answer.kind === "total") {
-    if (answer.cantidad === 0) return `${header}: no encontre gastos en ese período.`;
-    return `${header}: ${formatArs(answer.total)} en ${answer.cantidad} gasto${answer.cantidad === 1 ? "" : "s"}.`;
+    if (answer.cantidad === 0) return `${header}: no encontre gastos en ese período.${aviso}`;
+    // "movimientos", no "gastos": una compra en 3 cuotas dentro del rango son 3
+    // CARGOS de un solo gasto, y "3 gastos" es una cuenta falsa. El dashboard
+    // rotula el mismo numero "Transacciones"; "movimientos" es el equivalente
+    // en el registro de un lenguaje de chat.
+    return `${header}: ${formatArs(answer.total)} en ${answer.cantidad} movimiento${answer.cantidad === 1 ? "" : "s"}.${aviso}`;
   }
 
   if (answer.kind === "por_categoria") {
-    if (answer.filas.length === 0) return `${header}: no encontre gastos en ese período.`;
+    if (answer.filas.length === 0) return `${header}: no encontre gastos en ese período.${aviso}`;
 
     const visibles = answer.filas.slice(0, MAX_FILAS_POR_CATEGORIA);
     const resto = answer.filas.slice(MAX_FILAS_POR_CATEGORIA);
 
-    const lineas = visibles.map((f) => `${f.categoryName}: ${formatArs(f.total)}`);
+    const lineas = visibles.map((f) => `${escapeHtml(f.categoryName)}: ${formatArs(f.total)}`);
     if (resto.length) {
       const totalResto = resto.reduce((s, f) => s + f.total, 0);
       lineas.push(`y ${resto.length} más: ${formatArs(totalResto)}`);
     }
 
-    return [`${header}:`, ...lineas, `Total: ${formatArs(answer.total)}`].join("\n");
+    return [`${header}:`, ...lineas, `Total: ${formatArs(answer.total)}`].join("\n") + aviso;
   }
 
   // "tendencia"
   const conGasto = answer.meses.filter((m) => m.total > 0);
-  if (conGasto.length === 0) return `${header}: no encontre gastos en ese período.`;
+  if (conGasto.length === 0) return `${header}: no encontre gastos en ese período.${aviso}`;
 
   const lineas = answer.meses.map((m) => `${nombreMes(m.periodo)}: ${formatArs(m.total)}`);
-  return [`${header}:`, ...lineas].join("\n");
+  return [`${header}:`, ...lineas].join("\n") + aviso;
 }
