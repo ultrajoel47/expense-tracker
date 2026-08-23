@@ -78,7 +78,8 @@ Los tres son seams **deliberados**, no accidentales.
 
 ### `src/lib/telegram/` — el canal de ingesta
 
-- `client.ts` — `sendMessage`, `editMessage`, `getFile` contra la Bot API.
+- `client.ts` — `sendMessage` contra la Bot API. `editMessage` y `getFile` se
+  suman cuando los necesiten las rebanadas de corrección y de OCR.
 - `intake.ts` — convierte un update de Telegram en un `Intake` neutral
   (`{ senderId, texto?, imagen?, replyToMessageId?, callbackData? }`).
 
@@ -88,13 +89,38 @@ permitiría sumar WhatsApp después sin reescribir la ingesta.
 El webhook (`src/app/api/telegram/webhook/route.ts`) valida el header
 `X-Telegram-Bot-Api-Secret-Token`, inserta el `update_id` en `ProcessedUpdate`
 **antes de procesar** —y trata la violación del índice único como la señal de que
-es un reintento, descartándolo—, resuelve el usuario por `telegramChatId`
-(whitelist) y **siempre responde 200**: un error propagado hace que Telegram
-reintente y duplique gastos.
+es un reintento, descartándolo— y resuelve el usuario por `telegramChatId`
+(whitelist).
 
 El orden importa: insertar *después* de procesar deja abierta la ventana de 15-20s
 que puede tardar OCR + LLM, y en esa ventana el reintento de Telegram pasa el
 chequeo y carga el gasto dos veces.
+
+#### Las tres regiones del manejo de errores
+
+Telegram reintenta ante cualquier respuesta que no sea 2xx, así que la regla es
+**responder 200 casi siempre**. «Casi»: el manejo de errores está partido en tres
+regiones porque la respuesta correcta no es la misma en las tres. Un único catch
+que devolviera 200 siempre convierte cualquier falla en silencio, y el silencio
+hace que la persona reenvíe — con un **`update_id` nuevo**, que `ProcessedUpdate`
+no puede deduplicar. Un mensaje perdido se vuelve un gasto duplicado.
+
+| Región | Dónde | Respuesta |
+|--------|-------|-----------|
+| 1 | `claimUpdate` tira (error transitorio de Mongo) | **503** — única excepción deliberada al 200 |
+| 2 | Entre el claim y `expense.create` | 200 + `sendMessage` pidiendo que reenvíe |
+| 3 | Después de `expense.create` | 200 + log; **no** se pide reenvío |
+
+La Región 1 es la excepción porque es el único punto donde el reintento es
+*demostrablemente* seguro: o no se escribió nada y el reintento entra limpio, o la
+fila se escribió sin que llegáramos a contestar y el reintento choca con `P2002` y
+se descarta como duplicado. Ahí romper la regla la mejora.
+
+En la Región 2 nada se escribió todavía, así que pedir un reenvío es seguro. En la
+Región 3 el gasto ya existe y pedir un reenvío **causaría** el duplicado: lo único
+que queda es el log, y por eso son dos catches separados (el del `sendMessage` y el
+del update de `botChatId`/`botMessageId`), para que ninguno afirme algo falso sobre
+si la persona recibió la confirmación.
 
 ### `src/lib/ai/` — el parseo del mensaje
 
