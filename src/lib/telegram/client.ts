@@ -2,8 +2,17 @@ import { requireEnv } from "@/lib/env";
 
 export type TelegramMessage = { message_id: number; chat: { id: number } };
 
+/**
+ * Base de la Bot API. Se sobreescribe con `TELEGRAM_API_BASE_URL` **solo para
+ * pruebas locales**, apuntando a un mock que registra los mensajes que el bot
+ * manda: sin eso no hay forma de verificar el texto de una confirmacion ni los
+ * caminos de error del webhook sin un chat de Telegram real. En produccion la
+ * variable se deja sin definir.
+ */
+const API_BASE = process.env.TELEGRAM_API_BASE_URL ?? "https://api.telegram.org";
+
 function apiUrl(method: string) {
-  return `https://api.telegram.org/bot${requireEnv("TELEGRAM_BOT_TOKEN")}/${method}`;
+  return `${API_BASE}/bot${requireEnv("TELEGRAM_BOT_TOKEN")}/${method}`;
 }
 
 export async function sendMessage(

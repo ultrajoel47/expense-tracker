@@ -144,14 +144,17 @@ async function registerExpense(
     categories.find((c) => c.name === FALLBACK_CATEGORY);
 
   if (!category) {
-    console.error(
-      `No existe la categoria "${parsed.categoryName}" ni la de respaldo ` +
-        `"${FALLBACK_CATEGORY}": el gasto no se pudo registrar.`
-    );
+    // Cuando la IA devuelve una categoria que no existe, parse.ts ya la
+    // reemplazo por FALLBACK_CATEGORY, asi que nombrar las dos seria decir dos
+    // veces la misma: lo unico que falta es la fila de respaldo.
+    const detalle =
+      parsed.categoryName === FALLBACK_CATEGORY
+        ? `no existe la categoria de respaldo "${FALLBACK_CATEGORY}"`
+        : `no encontre la categoria "${parsed.categoryName}" ni la de respaldo "${FALLBACK_CATEGORY}"`;
+    console.error(`El gasto no se pudo registrar: ${detalle}.`);
     await sendMessage(
       intake.chatId,
-      `No lo pude registrar: no encontre la categoria "${parsed.categoryName}" ni la ` +
-        `categoria de respaldo "${FALLBACK_CATEGORY}". Creala en la web y proba de nuevo.`
+      `No lo pude registrar: ${detalle}. Creala en la web y proba de nuevo.`
     );
     return null;
   }
