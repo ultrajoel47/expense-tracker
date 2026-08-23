@@ -32,6 +32,32 @@ const LOCAL_WEBHOOK_URL =
   process.env.LOCAL_WEBHOOK_URL ?? "http://localhost:3000/api/telegram/webhook";
 const POLL_TIMEOUT_SECONDS = 30;
 
+/**
+ * Backoff ESCALADO ante fallas consecutivas.
+ *
+ * Sin esto, el catch del loop hacia un `continue` pelado: `getUpdates` tira
+ * cada vez que Telegram contesta `ok: false` (token mal escrito, bot revocado,
+ * 429, un corte de red), asi que el `continue` volvia a pedir inmediatamente y
+ * el script se convertia en un loop infinito apretado martillando
+ * api.telegram.org tan rapido como lo permite el event loop. El caso mas
+ * probable es el mas doloroso: un TELEGRAM_BOT_TOKEN mal tipeado en el primer
+ * arranque produce exactamente eso, y se gana un 429 justo cuando la persona
+ * esta tratando de probar el bot.
+ *
+ * Escalado y no fijo porque las dos causas tipicas quieren esperas distintas:
+ * un blip de red se resuelve en un segundo, y un token invalido no se va a
+ * arreglar solo — para ese conviene llegar rapido a un minuto entre intentos.
+ */
+const BACKOFF_MS = [1_000, 2_000, 5_000, 15_000, 30_000, 60_000];
+
+function backoffFor(consecutiveFailures: number): number {
+  return BACKOFF_MS[Math.min(consecutiveFailures, BACKOFF_MS.length) - 1];
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function apiUrl(method: string): string {
   return `https://api.telegram.org/bot${TOKEN}/${method}`;
 }
@@ -70,8 +96,7 @@ async function forward(update: unknown): Promise<number> {
     },
     body: JSON.stringify(update),
   });
-  // Se descarta el body a proposito: el route handler siempre contesta 200
-  // salvo por el secret, asi que lo unico interesante para el usuario es el
+  // Se descarta el body a proposito: lo unico interesante para el usuario es el
   // status y lo que el propio bot mando de vuelta por sendMessage.
   await res.text();
   return res.status;
@@ -102,13 +127,23 @@ async function main() {
   console.log("Esperando mensajes en Telegram... (Ctrl-C para cortar)\n");
 
   let offset: number | null = null;
+  let pollFailures = 0;
+  let forwardFailures = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
     let updates: any[];
     try {
       updates = await getUpdates(offset);
+      pollFailures = 0;
     } catch (error) {
-      console.error("Error consultando getUpdates, reintentando:", error);
+      pollFailures += 1;
+      const wait = backoffFor(pollFailures);
+      console.error(
+        `Error consultando getUpdates (falla consecutiva #${pollFailures}), ` +
+          `reintentando en ${wait / 1000}s:`,
+        error
+      );
+      await sleep(wait);
       continue;
     }
 
@@ -119,12 +154,39 @@ async function main() {
       let status: number;
       try {
         status = await forward(update);
+        forwardFailures = 0;
       } catch (error) {
-        console.error("  Error reenviando al webhook local (sigue corriendo dev?):", error);
+        forwardFailures += 1;
+        const wait = backoffFor(forwardFailures);
+        console.error(
+          `  Error reenviando al webhook local (falla consecutiva #${forwardFailures}, ` +
+            `sigue corriendo dev?), reintentando en ${wait / 1000}s:`,
+          error
+        );
         // No avanzamos el offset: reintenta este mismo update la proxima vuelta.
+        // El sleep es por el mismo motivo que arriba: si `npm run dev` no esta
+        // levantado, sin espera esto es un loop apretado contra localhost Y
+        // contra la Bot API, porque el break vuelve al getUpdates.
+        await sleep(wait);
         break;
       }
       console.log(`  -> local respondio ${status}`);
+
+      // Un status distinto de 2xx se trata como lo trataria Telegram: NO se
+      // confirma el update, asi que se re-entrega. El webhook devuelve 503
+      // cuando falla el claim de idempotencia (Region 1), y ese es justamente
+      // el caso donde el reintento es lo correcto. Reproducirlo acá es lo que
+      // hace que probar en local se parezca a produccion.
+      if (status < 200 || status >= 300) {
+        forwardFailures += 1;
+        const wait = backoffFor(forwardFailures);
+        console.error(
+          `  El webhook local rechazo el update (falla consecutiva #${forwardFailures}). ` +
+            `Como haria Telegram, no se confirma: se re-entrega en ${wait / 1000}s.`
+        );
+        await sleep(wait);
+        break;
+      }
 
       // Avanza el offset SOLO despues de reenviar con exito, para no perder
       // un update si el fetch local falla.
