@@ -107,6 +107,38 @@ const LECTURA_RE = new RegExp(
 
 const PROHIBIDO_RE = /userId:\s*session\.id/;
 
+/**
+ * LIMITACIONES CONOCIDAS de este heuristico (documentadas aca, no solo en el
+ * reporte de la tarea, porque el reporte se borra al cerrar la slice y una
+ * limitacion que solo vive ahi es una limitacion olvidada):
+ *
+ * 1. GAP DE MODELO ANIDADO: `LECTURA_RE` ancla en `prisma.expense.` /
+ *    `prisma.recurringExpense.` de forma literal. Un filtro anidado del tipo
+ *    `prisma.installment.findMany({ where: { expense: { userId: session.id } } })`
+ *    es invisible para este test porque la llamada de nivel superior es sobre
+ *    OTRO modelo. Ese shape exacto ya existe, hoy de forma legitima, en
+ *    `src/app/api/credit-cards/[id]/pending/route.ts` (las tarjetas son por
+ *    persona, no por scope). El mismo shape sobre un modelo futuro quedaria
+ *    permanentemente sin ver. No se resuelve extendiendo el regex: seria
+ *    empezar a construir un parser de relaciones anidadas, que es exactamente
+ *    el tipo de complejidad que este heuristico decide no asumir.
+ *
+ * 2. FALSO POSITIVO POR FUSION EN `Promise.all`: `LECTURA_RE` captura de forma
+ *    no-greedy hasta el proximo `);`. Cuando una llamada termina en `,` en vez
+ *    de `;` (tipico de `Promise.all([a, b])`), la captura sigue de largo y
+ *    fusiona esa llamada con la siguiente en un solo bloque. Si mas adelante
+ *    se agrega, DENTRO de ese mismo `Promise.all`, una lectura de OTRO modelo
+ *    que legitimamente filtra por `userId: session.id` a secas (ej.
+ *    `CreditCard`, que no tiene `scope`), el test de arriba la marcaria como
+ *    infractora aunque sea correcta. Hoy no pasa: `src/app/api/telegram/webhook/route.ts`
+ *    tiene ese mismo shape de `Promise.all` pero con `payer.id`, no
+ *    `session.id`. Un cambio futuro tipo dashboard que junte tarjetas y
+ *    gastos en el mismo `Promise.all` podria dispararlo. Tampoco se resuelve
+ *    en el regex: requeriria rastrear identificadores de variable
+ *    (indireccion), que es el otro tipo de complejidad que este heuristico
+ *    decide no asumir.
+ */
+
 /** Cuerpos de argumento de cada llamada de lectura de Expense/RecurringExpense
  * encontrada en `src`. `matchAll` clona `LECTURA_RE` internamente (exige el
  * flag `g` para eso), asi que reusar la misma instancia entre archivos es
