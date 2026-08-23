@@ -62,6 +62,25 @@ El modelo central. Un gasto puntual.
 materialización — este último tiene además una versión **única y parcial** creada
 a mano, ver [Pasos manuales en Mongo](#pasos-manuales-en-mongo).
 
+### `PRIMER_PERIODO_MATERIALIZABLE`
+
+Constante en `src/lib/recurring-materialize.ts`, valor `"2026-08"`. Es el
+**piso** de la ventana de meses que la materialización automática puede crear;
+el **techo** es el mes actual (en hora de Buenos Aires, no la del proceso —
+ver `todayInBuenosAires` en `src/lib/ai/normalize.ts`). Fuera de esa ventana,
+`materializeRecurringForMonth` no crea nada y devuelve `0`.
+
+Es un mes fijo, no derivado de `RecurringExpense.createdAt`, y eso es
+deliberado: las 10 plantillas reales se crearon en 2026-03, pero marzo a julio
+de 2026 **ya contienen** el alquiler, los servicios, el seguro y la cochera
+cargados a mano como `Expense` comunes. Derivar el piso de `createdAt`
+materializaría esos cinco meses también y duplicaría el alquiler. `2026-08` es
+el primer mes en el que los recurrentes dejaron de cargarse a mano.
+
+El guard de `createdAt` (una plantilla no puede materializar un mes anterior a
+su propia creación) sigue existiendo aparte y es complementario: cubre
+plantillas creadas DESPUES del piso.
+
 ## Installment
 
 Cuota de un gasto en cuotas. `[expenseId, installmentNumber]` es único.

@@ -21,12 +21,16 @@ Telegram; la web consulta y corrige.
 ```
 src/
 ├── app/
-│   ├── (auth)/                  # Rutas públicas: login, registro
+│   ├── (auth)/                  # Rutas públicas: login (la pagina de registro
+│   │                            # se borro; el alta sigue existiendo como
+│   │                            # POST /api/auth/register, cerrado por
+│   │                            # allowlist, sin UI propia)
 │   ├── (dashboard)/             # Rutas protegidas
 │   │   └── dashboard/
 │   │       ├── expenses/        # Listado y alta de gastos
 │   │       ├── categories/      # Categorías
 │   │       ├── credit-cards/    # Tarjetas de crédito
+│   │       ├── recurring/       # Plantillas de gastos recurrentes
 │   │       └── export/          # Exportación
 │   └── api/
 │       ├── auth/                # Login, registro, logout, me, users
@@ -55,10 +59,12 @@ src/
 └── scripts/                     # Semillas y migraciones puntuales (sin type-check)
 ```
 
-Las páginas de la vista de casa y de recurrentes, y varios de los módulos de
-`lib/` de arriba, se agregan a medida que avanzan las rebanadas de
-implementación descritas en la sección 16 del
-[diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).
+La página de recurrentes (`dashboard/recurring/`) y la materialización
+automática ya existen — son la feature principal de la Rebanada 3. Lo que
+sigue pendiente, si algo, se agrega a medida que avanzan las próximas
+rebanadas descritas en la sección 16 del
+[diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md); ver
+[features-backlog.md](features-backlog.md) para lo que falta hoy.
 
 ## Patrones clave
 

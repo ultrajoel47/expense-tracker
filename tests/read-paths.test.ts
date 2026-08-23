@@ -137,6 +137,30 @@ const PROHIBIDO_RE = /userId:\s*session\.id/;
  *    en el regex: requeriria rastrear identificadores de variable
  *    (indireccion), que es el otro tipo de complejidad que este heuristico
  *    decide no asumir.
+ *
+ * 3. LECTURA SIN NINGUN `where`: `LECTURA_RE` solo mira DENTRO del argumento
+ *    de una llamada que ya matcheo; no exige que ese argumento tenga un
+ *    `where` en absoluto. Un `prisma.expense.findMany({ orderBy, take })` sin
+ *    `where` pasa las DOS pruebas de arriba (no hay `userId: session.id` que
+ *    prohibir, y "toda lectura pasa por la regla de visibilidad" solo revisa
+ *    que el ARCHIVO mencione `visibleExpensesWhere` en algun lado, no que esa
+ *    llamada puntual la use). Un archivo que ya usa la regla en otras
+ *    llamadas queda con la guardia baja: un `findMany` nuevo sin `where`
+ *    devuelve TODOS los gastos de TODOS los usuarios, de las dos casas y de
+ *    los dos scopes. Es mas facil de escribir por accidente que un filtro a
+ *    mano (alcanza con olvidarse el `where`), asi que el gap es mas ancho de
+ *    lo que sugiere el nombre "PROHIBIDO_RE": no hay nada prohibido, hay algo
+ *    ausente, y este heuristico solo sabe buscar texto presente.
+ *
+ * 4. OTRO NOMBRE PARA LA SESION: `PROHIBIDO_RE` matchea el string literal
+ *    `userId: session.id`. Cualquier alias rompe el match: `const s = await
+ *    getSession()` seguido de `{ userId: s.id }`, o una desestructuracion
+ *    (`const { id } = await getSession()` seguido de `{ userId: id }`), pasan
+ *    de largo aunque sean exactamente el mismo bug que el test existe para
+ *    atrapar. No se resuelve en el regex sin rastrear de donde sale cada
+ *    identificador — el mismo tipo de indireccion que la limitacion 2 ya
+ *    nombra, aca aplicado al nombre de la variable en vez de al limite de la
+ *    llamada.
  */
 
 /** Cuerpos de argumento de cada llamada de lectura de Expense/RecurringExpense

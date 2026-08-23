@@ -15,13 +15,15 @@ Construido con Next.js 16, Prisma y MongoDB.
 - CRUD de gastos con categorias, tarjetas de crédito y cuotas
 - Ambito `casa` / `personal`: los de casa los ven los dos miembros del hogar, los
   personales sólo quien pagó
-- Gastos recurrentes como plantillas (el CRUD de la API)
+- Gastos recurrentes: plantillas administradas desde `dashboard/recurring/`, con
+  materialización automática mensual (perezosa, al leer un mes se crean los
+  `Expense` que falten — ver `src/lib/recurring-materialize.ts`)
 - Dashboard con graficos (Recharts)
 - Exportacion a CSV
 
-Todavía **no** están, aunque el diseño los contempla: el OCR de comprobantes, la
-materialización automática de los recurrentes mes a mes, y la corrección de un
-gasto por reply en Telegram. Ver [docs/features-backlog.md](docs/features-backlog.md).
+Todavía **no** están, aunque el diseño los contempla: el OCR de comprobantes y
+la corrección de un gasto por reply en Telegram. Ver
+[docs/features-backlog.md](docs/features-backlog.md).
 
 ## Tech Stack
 
