@@ -2,18 +2,28 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireEnv } from "@/lib/env";
 import { toIntake } from "@/lib/telegram/intake";
-import { claimUpdate } from "@/lib/idempotency";
+import { claimUpdate, isDuplicateKeyError } from "@/lib/idempotency";
 import { sendMessage } from "@/lib/telegram/client";
 
 /** Telegram reintenta ante cualquier respuesta que no sea 200. Siempre 200. */
 const OK = () => NextResponse.json({ ok: true });
+const UNAUTHORIZED = () => NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
 export async function POST(req: Request) {
-  if (
-    req.headers.get("x-telegram-bot-api-secret-token") !==
-    requireEnv("TELEGRAM_WEBHOOK_SECRET")
-  ) {
-    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+  let secret: string;
+  try {
+    secret = requireEnv("TELEGRAM_WEBHOOK_SECRET");
+  } catch (error) {
+    // Sin el secret no podemos autenticar el request: no es distinto de un
+    // secret invalido a los ojos del invariante "solo 401 no es 200", pero
+    // sí es distinto en causa — se loguea fuerte para diferenciarlo de un
+    // atacante mandando tokens al azar.
+    console.error("Falta configurar TELEGRAM_WEBHOOK_SECRET", error);
+    return UNAUTHORIZED();
+  }
+
+  if (req.headers.get("x-telegram-bot-api-secret-token") !== secret) {
+    return UNAUTHORIZED();
   }
 
   let intake;
@@ -24,9 +34,9 @@ export async function POST(req: Request) {
   }
   if (!intake) return OK();
 
-  if (!(await claimUpdate(prisma, intake.updateId))) return OK();
-
   try {
+    if (!(await claimUpdate(prisma, intake.updateId))) return OK();
+
     // /start <codigo>: vincula el chat con el usuario
     const startMatch = intake.text?.match(/^\/start\s+([a-f0-9]{8})$/i);
     if (startMatch) {
@@ -37,10 +47,21 @@ export async function POST(req: Request) {
         await sendMessage(intake.chatId, "Ese codigo no es valido o ya se uso.");
         return OK();
       }
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { telegramChatId: intake.chatId, telegramLinkCode: null },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { telegramChatId: intake.chatId, telegramLinkCode: null },
+        });
+      } catch (error) {
+        if (isDuplicateKeyError(error)) {
+          await sendMessage(
+            intake.chatId,
+            "Este chat de Telegram ya esta vinculado a otra cuenta."
+          );
+          return OK();
+        }
+        throw error;
+      }
       await sendMessage(intake.chatId, `Listo ${user.name}, ya podes mandarme gastos.`);
       return OK();
     }
