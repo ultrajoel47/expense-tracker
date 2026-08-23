@@ -72,15 +72,6 @@ export async function editMessageText(
 }
 
 /**
- * Contesta un callback_query. Telegram lo EXIGE: sin esto el boton se queda
- * girando en el cliente aunque la correccion se haya aplicado.
- *
- * Un fallo aca no se relanza. Los callback_query expiran (Telegram los
- * descarta al rato) y contestar uno vencido devuelve `ok:false`; a esa altura
- * la correccion YA se aplico, asi que tirar convertiria un exito con un acuse
- * perdido en un camino de error. Se loguea y sigue.
- */
-/**
  * Cambia SOLO el teclado de un mensaje, sin tocar su texto. Es lo que usan los
  * botones de navegacion (abrir categorias, volver, confirmar borrado): no
  * cambian el gasto, asi que reconstruir el texto de la confirmacion seria
@@ -109,6 +100,15 @@ export async function editMessageReplyMarkup(
   }
 }
 
+/**
+ * Contesta un callback_query. Telegram lo EXIGE: sin esto el boton se queda
+ * girando en el cliente aunque la correccion se haya aplicado.
+ *
+ * Un fallo aca no se relanza. Los callback_query expiran (Telegram los
+ * descarta al rato) y contestar uno vencido devuelve `ok:false`; a esa altura
+ * la correccion YA se aplico, asi que tirar convertiria un exito con un acuse
+ * perdido en un camino de error. Se loguea y sigue.
+ */
 export async function answerCallbackQuery(
   callbackQueryId: string,
   text?: string
