@@ -93,19 +93,25 @@ const NO_VISIBILITY_ALLOWLIST: Record<string, { motivo: string; llamadas: string
   },
   "app/api/telegram/webhook/route.ts": {
     motivo:
-      "Tres llamadas exentas. (1) El `aggregate` del promedio de la categoria " +
-      "para la señal de monto anomalo: el promedio es del hogar, no el de " +
-      "quien escribe. (2) El `findFirst` de `handleCallback`: la puerta de la " +
+      "Cuatro llamadas exentas. (1 y 2) Los dos `aggregate` del promedio de " +
+      "la categoria para la señal de monto anomalo (uno en `registerExpense`, " +
+      "otro en `buildCorrectedConfirmation`): el promedio es del hogar, no el " +
+      "de quien escribe. Identificadas por su propio `where` (`categoryId: " +
+      "category.id` y `categoryId: corrected.categoryId`) en vez del " +
+      "generico `_avg: { amount: true }` — ese fragmento por si solo eximiria " +
+      "a un tercer `aggregate` cualquiera con esa forma, sin que nadie lo " +
+      "decida. (3) El `findFirst` de `handleCallback`: la puerta de la " +
       "edicion por bot es `canEditViaBot`, y es MAS ESTRICTA que la " +
       "visibilidad — exige haber pagado o cargado el gasto, no solo poder " +
       "verlo. Filtrar tambien por visibilidad ahi cancela la Regla de Dominio " +
-      "5 en el caso que la motiva (ver C1 del review del Bloque 2). (3) El " +
+      "5 en el caso que la motiva (ver C1 del review del Bloque 2). (4) El " +
       "`findFirst` con `select: { creditCard }` de `buildCorrectedConfirmation`: " +
       "lee solo el nombre de la tarjeta de un gasto que el actor ya esta " +
       "autorizado a editar (paso por `canEditViaBot` en `handleCallback` antes " +
       "de llegar aca).",
     llamadas: [
-      "_avg: { amount: true }",
+      "where: { categoryId: category.id }",
+      "where: { categoryId: corrected.categoryId }",
       "where: { id: action.expenseId }",
       "select: { creditCard: { select: { name: true } } }",
     ],
@@ -128,28 +134,37 @@ const NO_VISIBILITY_ALLOWLIST: Record<string, { motivo: string; llamadas: string
   },
   "lib/recurring-materialize.ts": {
     motivo:
-      "`client.recurringExpense.findMany({ where: { active, frequency } })` " +
-      "trae TODAS las plantillas activas del hogar para materializarlas, sin " +
-      "importar quien disparo el GET que dispara la materializacion. No hay " +
-      "actor cuya visibilidad aplicar: es un job que corre para las dos " +
-      "personas a la vez. Filtrar por visibilidad del actor dejaria sin " +
-      "materializar (silenciosamente) las plantillas de la otra persona.",
-    llamadas: ["active: true, frequency: { in: [...FRECUENCIAS_MATERIALIZABLES] }"],
+      "Dos llamadas exentas, mismo motivo para las dos: no hay actor cuya " +
+      "visibilidad aplicar. (1) `client.recurringExpense.findMany({ where: " +
+      "{ active, frequency } })` trae TODAS las plantillas activas del hogar " +
+      "para materializarlas, sin importar quien disparo el GET que dispara " +
+      "la materializacion: es un job que corre para las dos personas a la " +
+      "vez. Filtrar por visibilidad del actor dejaria sin materializar " +
+      "(silenciosamente) las plantillas de la otra persona. (2) " +
+      "`tx.expense.findFirst({ where: { recurringExpenseId, recurringPeriod " +
+      "} })`, dentro de la transaccion: es el chequeo de idempotencia de la " +
+      "materializacion (busca si el periodo ya se materializo), sin actor " +
+      "tampoco — mismo motivo que (1).",
+    llamadas: [
+      "active: true, frequency: { in: [...FRECUENCIAS_MATERIALIZABLES] }",
+      "recurringExpenseId: t.id, recurringPeriod: periodo",
+    ],
   },
 };
 
 /** Lecturas que devuelven filas o agregados de Expense / RecurringExpense
  * (matcheo por ARCHIVO, usado por la regla de visibilidad y por el guard de
- * obsolescencia de NO_VISIBILITY_ALLOWLIST). Prefijo `(?:prisma|client)\.`:
+ * obsolescencia de NO_VISIBILITY_ALLOWLIST). Prefijo `(?:prisma|client|tx)\.`:
  * los modulos puros (`src/lib/expenses/correct.ts`,
  * `src/lib/recurring-materialize.ts`) reciben el cliente de Prisma por
  * parametro y lo llaman `client`, no `prisma` — anclar solo en `prisma` deja
  * afuera justo a los modulos que se testean sin base, que es el caso que mas
- * le importa a este archivo (ver I3 del review del Bloque 2). Sigue sin ver
- * un alias como `tx` (el cliente de una transaccion, ver
- * `recurring-materialize.ts`): es la misma limitacion 4 de mas abajo, aplicada
- * al nombre del cliente en vez de al de la sesion. */
-const READ_CALL = /(?:prisma|client)\.(expense|recurringExpense)\.(findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow|count|aggregate|groupBy)/;
+ * le importa a este archivo (ver I3 del review del Bloque 2). `tx` se sumo
+ * despues (re-review de 3B): es el alias del cliente DENTRO de una
+ * transaccion (`client.$transaction(async (tx) => ...)`, ver
+ * `recurring-materialize.ts`), y sin este alias el escaner no veia
+ * `tx.expense.findFirst`, el chequeo de idempotencia de la materializacion. */
+const READ_CALL = /(?:prisma|client|tx)\.(expense|recurringExpense)\.(findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow|count|aggregate|groupBy)/;
 
 // ─── Matcheo por LLAMADA (tightening de esta tarea) ─────────────────────────
 
@@ -166,15 +181,20 @@ const LECTURAS = String.raw`(?:findMany|findFirst|findUnique|findFirstOrThrow|fi
  * escrito de forma uniforme en todo el repo, y el test de obsolescencia que el
  * archivo ya tiene avisa si eso deja de ser cierto.
  *
- * Prefijo `(?:prisma|client)\.`, no solo `prisma\.`: los modulos puros reciben
- * el cliente de Prisma por PARAMETRO (para poder testearse sin base) y lo
- * llaman `client`, nunca `prisma` — anclar solo en el literal `prisma` deja
- * esos modulos completamente invisibles para este escaner, que es como
+ * Prefijo `(?:prisma|client|tx)\.`, no solo `prisma\.`: los modulos puros
+ * reciben el cliente de Prisma por PARAMETRO (para poder testearse sin base)
+ * y lo llaman `client`, nunca `prisma` — anclar solo en el literal `prisma`
+ * deja esos modulos completamente invisibles para este escaner, que es como
  * `lib/expenses/correct.ts` quedo afuera hasta el review del Bloque 2 pese a
- * tener dos lecturas de Expense sin visibilidad.
+ * tener dos lecturas de Expense sin visibilidad. `tx` es el mismo caso un
+ * nivel mas adentro: el cliente que recibe el callback de
+ * `client.$transaction(async (tx) => ...)` (ver `recurring-materialize.ts`).
+ * Sin este alias, `tx.expense.findFirst` — el chequeo de idempotencia de la
+ * materializacion — quedaba invisible para las dos pruebas de abajo que usan
+ * `LECTURA_RE`.
  */
 const LECTURA_RE = new RegExp(
-  String.raw`(?:prisma|client)\.` + MODELOS + String.raw`\.` + LECTURAS + String.raw`\s*\(([\s\S]*?)\)\s*;`,
+  String.raw`(?:prisma|client|tx)\.` + MODELOS + String.raw`\.` + LECTURAS + String.raw`\s*\(([\s\S]*?)\)\s*;`,
   "g"
 );
 
