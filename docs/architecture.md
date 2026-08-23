@@ -169,7 +169,24 @@ el mismo pipeline que un gasto escrito.
   peligrosa del sistema porque no se nota. En las dos, **escribir la marca
   después del trabajo anula la defensa**.
 - **Semántica de cuotas**: lo que se muestra en un mes es lo que efectivamente
-  se paga ese mes (el monto de la cuota que vence, no el total de la compra);
-  `expensesToCharges` (`src/lib/expenses/charges.ts`) es el ÚNICO lugar donde
-  vive esa regla, y tanto el listado como los gráficos la consumen — ver la
-  Enmienda 1 del [diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).
+  se paga ese mes (el monto de la cuota que vence, no el total de la compra) —
+  ver la Enmienda 1 del [diseño](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md).
+  **Esta regla está implementada dos veces, DE FORMA INDEPENDIENTE, y nada
+  automatizado las mantiene sincronizadas:**
+  - Para los gráficos: `expensesToCharges` (`src/lib/expenses/charges.ts`),
+    un transform en JS sobre gastos ya traídos de la base.
+  - Para el listado: `src/app/api/expenses/route.ts`, en un `where` de Prisma
+    que filtra en la base (líneas 46-52, la rama `installments: { some: {
+    dueDate: { gte, lt } } }`) más un filtro en JS aparte que calcula la
+    cuota vigente para la respuesta (líneas 84-89, `currentInstallment`).
+
+  Las dos implementaciones coinciden hoy — se verificó a mano contrastando el
+  total de marzo 2026 por ambos caminos (71 cargos) — pero esa coincidencia no
+  está garantizada por ningún test ni por compartir código: **quien cambie una
+  tiene que cambiar la otra a mano**, o vuelven a divergir, que es exactamente
+  el bug que esta rebanada corrigió (ver el ítem 1 de
+  [features-backlog.md](features-backlog.md#1-cuotas--filtrado-correcto-por-mes)).
+  Unificarlas requeriría que el listado dejara de paginar en la base — un
+  cambio de diseño, no de esta rebanada — y quedó anotado como pendiente para
+  la próxima (agregar un test que las fije a estar de acuerdo, ejercitando el
+  camino de Prisma contra una base real).

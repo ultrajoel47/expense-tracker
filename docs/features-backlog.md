@@ -55,9 +55,17 @@ efectivamente se paga ese mes, no lo que se compró:
   `dueDate` de esa cuota — nunca por el monto total, y nunca en el mes de la
   compra.
 
-La regla vive en un único lugar, `expensesToCharges` (`src/lib/expenses/charges.ts`),
-que consumen tanto el listado como los gráficos. Detalle completo en
-[la Enmienda 1](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md#enmienda-1--semántica-de-cuotas-decidida-2026-08-23-rebanada-3).
+**La regla está implementada dos veces, no una, y nada las mantiene
+sincronizadas:** `expensesToCharges` (`src/lib/expenses/charges.ts`) para los
+gráficos, y por separado en `src/app/api/expenses/route.ts` para el listado
+— un `where` de Prisma que filtra en la base (líneas 46-52) más un filtro en
+JS aparte para la cuota vigente de cada fila de la respuesta (líneas 84-89).
+Coinciden hoy (verificado a mano: 71 cargos de marzo 2026 por los dos
+caminos), pero es una coincidencia sin garantía automática — cambiar una
+implementación sin la otra las vuelve a divergir, que es precisamente este
+bug de nuevo. Detalle completo en
+[la Enmienda 1](superpowers/specs/2026-08-22-gastos-bot-telegram-design.md#enmienda-1--semántica-de-cuotas-decidida-2026-08-23-rebanada-3);
+ver también la nota en [architecture.md](architecture.md#reglas-transversales).
 
 ---
 
